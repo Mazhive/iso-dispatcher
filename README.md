@@ -17,7 +17,7 @@ Bepaal het platform/type van een `.iso` **uitsluitend op basis van ISO-inhoud** 
 
 ## Gemeten nauwkeurigheid (bibliotheektest, 176 ISO's)
 
-Metingen op `/mnt/VG_00/PUBLIC-LIBRARY/GAMES/GAMES`:
+Metingen op `pad:/`:
 
 | Scan-window | Correct | Accuracy | Opmerking |
 |---|---:|---:|---|
