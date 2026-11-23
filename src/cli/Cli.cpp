@@ -28,7 +28,7 @@ QString Cli::helpText()
         "  iso-dispatcher why <file.iso>           Show full score/evidence breakdown\n"
         "  iso-dispatcher launch <file.iso> [--class id] [--dry-run]\n"
         "  iso-dispatcher learn <dir> [--dry-run] [--limit N]  Seed knowledge from ISO library\n"
-        "  iso-dispatcher make-marker <path> [--class id] [--dry-run] [--json]\n"
+        "  iso-dispatcher make-marker <path> [--class id] [--dry-run] [--force] [--json]\n"
         "                                          Propose/create boot marker for a dir/file\n"
         "  iso-dispatcher stats                    Knowledge stats\n"
         "  iso-dispatcher decisions [N]            Recent decisions\n"
@@ -78,7 +78,7 @@ int Cli::run(const QStringList &args)
     if (cmd == QStringLiteral("export")) return cmdExport(args.mid(2));
     if (cmd == QStringLiteral("config")) return cmdConfig(args.mid(2));
     if (cmd == QStringLiteral("about") || cmd == QStringLiteral("--about") || cmd == QStringLiteral("--version") || cmd == QStringLiteral("-V")) {
-        out << "iso-dispatcher 0.0.3\n"
+        out << "iso-dispatcher 0.0.4\n"
             << "Content-based ISO classifier/launcher\n\n"
             << "Required emulators/applications:\n"
             << "  - PS1 / PSX  : DuckStation or RetroArch (PSX core)\n"
@@ -295,11 +295,13 @@ int Cli::cmdMakeMarker(const QStringList &a)
     QString forcedClass;
     bool dry = false;
     bool json = false;
+    bool force = false;
     for (int i = 0; i < a.size(); ++i) {
         const QString x = a.at(i);
         if ((x == QStringLiteral("--class") || x == QStringLiteral("--system")) && i + 1 < a.size()) forcedClass = a.at(++i);
         else if (x == QStringLiteral("--dry-run")) dry = true;
         else if (x == QStringLiteral("--json")) json = true;
+        else if (x == QStringLiteral("--force")) force = true;
         else if (x.startsWith(QStringLiteral("--class="))) forcedClass = x.mid(QStringLiteral("--class=").size());
         else if (x.startsWith(QStringLiteral("--system="))) forcedClass = x.mid(QStringLiteral("--system=").size());
         else if (input.isEmpty()) input = x;
@@ -310,11 +312,22 @@ int Cli::cmdMakeMarker(const QStringList &a)
     MarkerMaker mm(m.cfg, m.probe, m.classifier);
     const MarkerProposal p = mm.propose(input, forcedClass);
 
-    if (json) {
+    QString action = p.status; // proposed/unchanged/exists/ambiguous/error
+    if (p.ok && p.status == QStringLiteral("exists") && force) action = QStringLiteral("overwrite");
+    if (p.ok && p.status == QStringLiteral("proposed")) action = dry ? QStringLiteral("proposed") : QStringLiteral("create");
+
+    auto emitJson = [&](int exitCode) {
         QJsonObject o = p.toJson();
         o.insert(QStringLiteral("dryRun"), dry);
+        o.insert(QStringLiteral("force"), force);
+        o.insert(QStringLiteral("action"), action);
         out << QJsonDocument(o).toJson(QJsonDocument::Indented) << Qt::flush;
-    } else {
+        return exitCode;
+    };
+
+    if (json && !p.ok) return emitJson(p.status == QStringLiteral("ambiguous") ? 2 : 2);
+
+    if (!json) {
         out << "Status: " << p.status << "\n";
         if (!p.classId.isEmpty()) out << "Class: " << p.classId << "\n";
         if (!p.entry.isEmpty()) out << "Entry: " << p.entry << "\n";
@@ -331,37 +344,47 @@ int Cli::cmdMakeMarker(const QStringList &a)
     }
 
     if (!p.ok) {
-        if (!json) err << Qt::flush;
-        if (p.status == QStringLiteral("ambiguous")) return 2;
+        if (json) return emitJson(2);
+        err << Qt::flush;
         return 2;
     }
 
-    if (p.status == QStringLiteral("unchanged") || p.status == QStringLiteral("exists")) {
-        out << Qt::flush;
-        return 0;
+    if (p.status == QStringLiteral("unchanged")) {
+        if (!json) out << "Skipped: marker already up-to-date\n";
+        return json ? emitJson(0) : (out << Qt::flush, 0);
+    }
+
+    if (p.status == QStringLiteral("exists") && !force) {
+        if (!json) err << "Warning: marker exists with different content; use --force to overwrite: " << p.markerPath << "\n";
+        return json ? emitJson(0) : (err << Qt::flush, 0);
     }
 
     if (dry) {
-        if (!json) out << "(dry-run) not writing\n";
-        out << Qt::flush;
-        return 0;
+        if (!json) {
+            if (action == QStringLiteral("overwrite")) out << "(dry-run) would overwrite\n";
+            else out << "(dry-run) not writing\n";
+        }
+        return json ? emitJson(0) : (out << Qt::flush, 0);
     }
 
     QFile f(p.markerPath);
-    if (f.exists()) {
-        if (!json) out << "Skipped: marker exists: " << p.markerPath << "\n";
-        out << Qt::flush;
-        return 0;
-    }
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::NewOnly)) {
+    QIODevice::OpenMode mode = QIODevice::WriteOnly | QIODevice::Text;
+    if (action == QStringLiteral("overwrite")) mode |= QIODevice::Truncate;
+    else mode |= QIODevice::NewOnly;
+
+    if (!f.open(mode)) {
         err << "Failed to write marker: " << p.markerPath << "\n" << Qt::flush;
-        return 1;
+        return json ? emitJson(1) : 1;
     }
     f.write(p.markerContent.toUtf8());
     f.close();
-    if (!json) out << "Wrote: " << p.markerPath << "\n";
-    out << Qt::flush;
-    return 0;
+
+    if (action == QStringLiteral("overwrite")) {
+        if (!json) out << "Overwritten: " << p.markerPath << "\n";
+    } else {
+        if (!json) out << "Created: " << p.markerPath << "\n";
+    }
+    return json ? emitJson(0) : (out << Qt::flush, 0);
 }
 
 int Cli::cmdStats()

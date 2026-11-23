@@ -433,7 +433,7 @@ Supported validation:
 iso-dispatcher includes a `make-marker` CLI command to propose/create boot markers:
 
 ```bash
-iso-dispatcher make-marker <path> [--class id|--system id] [--dry-run] [--json]
+iso-dispatcher make-marker <path> [--class id|--system id] [--dry-run] [--force] [--json]
 ```
 
 - `<path>` can be a game directory or a specific entry file.

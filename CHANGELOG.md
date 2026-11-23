@@ -4,10 +4,25 @@ All notable changes to `iso-dispatcher` are documented in this file.
 
 ## Versioning & builds
 
-- **Version**: `MAJOR.MINOR.PATCH` (current: `0.0.3`)
+- **Version**: `MAJOR.MINOR.PATCH` (current: `0.0.4`)
 - **Versioned builds**: place built binaries in `build/Build-versions/`
 - **Naming**: `iso-dispatcher-<version>-linux-x86_64` (append `-<shortsha>` or `-<date>` if needed for same-version dev snapshots)
 - **On new change/build**: bump version in source (`src/cli/Cli.cpp` about/version, `src/ui/MainWindow.cpp` About), update this changelog, rebuild, and copy the new binary to `build/Build-versions/` with the new version name. Keep previous versioned binaries for traceability.
+
+## [0.0.4] - 2026-11-23
+
+### Added
+- `make-marker` B3: `--force` flag, idempotent write/report behavior.
+- JSON output now includes `action`, `dryRun`, `force`.
+
+### Changed
+- `make-marker` reports clear actions: `Created`, `Skipped: marker already up-to-date`, warning+skip for existing different marker without `--force`, `Overwritten` with `--force`.
+- Dry-run with `--force` on existing different marker reports `would overwrite`.
+
+### Verified
+- Same dir twice → `Created`, then `unchanged`/`Skipped`.
+- Existing different marker without `--force` → warning, exit 0, content unchanged.
+- With `--force` → `Overwritten`, content replaced; `--force --dry-run --json` reports `action=overwrite`.
 
 ## [0.0.3] - 2026-11-23
 

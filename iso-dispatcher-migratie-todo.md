@@ -15,7 +15,8 @@
 - [x] Regressie boot-markers (sample 19/149 gevonden markers): 7x PS3 + 12x PS1 `classify` → alle OK, class/bootEntry correct. Geen `.ps2boot.iso`/`.pspboot.iso` markers gevonden in bibliotheek.
 - [x] B1 marker-maker ontwerp/scope + dry-run geïmplementeerd (`make-marker` subcommand, `MarkerMaker` core class).
 - [x] B2 entry-selectieregels per systeem geverifieerd/werkend.
-- [ ] Volgende: B3 idempotent schrijven/rapportage (`--force`, unchanged/skip/overwrite), daarna B4 batch, Fase C `emu-launch.sh` adapter.
+- [x] B3 idempotent schrijven + rapportage geïmplementeerd (`--force`, created/unchanged/skipped/overwritten, JSON action).
+- [ ] Volgende: B4 batch-modus; daarna Fase C `emu-launch.sh` adapter.
 
 ## Fase A — `iso-dispatcher` robuust maken (contract eerst)
 
@@ -80,10 +81,10 @@
 - [x] Test 3: temp dir met `GameA.cue` + `GameB.cue` → status `ambiguous`, candidates-lijst, geen write.
 
 ### B3. Idempotent schrijven + rapportage
-- [ ] Wijziging: `--dry-run`, `--force`, leesbare rapportage/JSON. Bestaande correcte marker niet overschrijven.
-- [ ] Test 1: run twee keer op zelfde map — verwacht: “created”, daarna “unchanged/skipped”.
-- [ ] Test 2: bestaande andere marker zonder `--force` — verwacht: skip + waarschuwing.
-- [ ] Test 3: met `--force` — verwacht: bewust overschreven, duidelijk gelogd.
+- [x] Wijziging: `--dry-run`, `--force`, leesbare rapportage/JSON. Bestaande correcte marker niet overschrijven; bestaande andere marker zonder `--force` skip+warning; met `--force` overwrite met duidelijke logging. JSON bevat `action`, `dryRun`, `force`.
+- [x] Test 1: zelfde temp map twee keer `make-marker --class ps1` → eerste `Created`, tweede `unchanged` + `Skipped: marker already up-to-date`.
+- [x] Test 2: bestaande andere marker zonder `--force` → `Warning: marker exists with different content; use --force...`, exit 0, inhoud ongewijzigd.
+- [x] Test 3: met `--force` → `Overwritten: ...`, inhoud correct vervangen. `--force --dry-run --json` rapporteert `action=overwrite`, `dryRun=true`.
 
 ### B4. Batch-modus voor bibliotheek
 - [ ] Wijziging: marker-maker kan directory-recursief verwerken met `--limit`, `--dry-run`, rapport.
