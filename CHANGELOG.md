@@ -12,9 +12,11 @@ All notable changes to `iso-dispatcher` are documented in this file.
 ## [0.0.3] - 2026-11-23
 
 ### Added
-- README (EN/NL): marker-maker documentation for `make-marker` command, flags, and deterministic entry-selection rules.
+- **Marker maker (B1/B2 baseline)**: `make-marker` CLI subcommand (iso-dispatcher) for boot-marker proposal/creation, with `--class/--system`, `--dry-run`, `--json`.
+- Deterministic entry selection: PS1/PS2 prefer `.cue`, then `.chd/.iso/.bin`; PS3 JB prefers `PS3_GAME/USRDIR/EBOOT.BIN`/`EBOOT.BIN`; PSP prefers `.iso/.cso/.pbp` or `EBOOT.PBP`; ambiguous candidates return error/list (no write).
+- README (EN/NL): marker-maker documentation added.
 
-### Verified (B2 entry-selection rules)
+### Verified (B2)
 - PS1/PS2: Ace Combat 2 map + `--class ps1 --dry-run` → kiest `.cue` (`proposed`, no write).
 - PS3 JB: `BLES00876-Toy Story 3` + `--class ps3 --dry-run` → kiest `PS3_GAME/USRDIR/EBOOT.BIN` (`unchanged`, existing marker up-to-date); fresh temp PS3 JB dir → `proposed` with same EBOOT entry.
 - Ambiguity: temp dir with multiple equal `.cue` candidates → `ambiguous`, candidate list, no write.
