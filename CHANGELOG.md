@@ -4,10 +4,15 @@ All notable changes to `iso-dispatcher` are documented in this file.
 
 ## Versioning & builds
 
-- **Version**: `MAJOR.MINOR.PATCH` (current: `0.0.6`)
+- **Version**: `MAJOR.MINOR.PATCH` (current: `0.0.7`)
 - **Versioned builds**: place built binaries in `build/Build-versions/`
 - **Naming**: `iso-dispatcher-<version>-linux-x86_64` (append `-<shortsha>` or `-<date>` if needed for same-version dev snapshots)
 - **On new change/build**: bump version in source (`src/cli/Cli.cpp` about/version, `src/ui/MainWindow.cpp` About), update this changelog, rebuild, and copy the new binary to `build/Build-versions/` with the new version name. Keep previous versioned binaries for traceability.
+
+## [0.0.7] - 2026-11-23
+
+### Fixed
+- `Launcher`: detach launched emulator stdio (stdin/stdout/stderr -> null) to prevent emulator output from polluting caller/GUI terminals.
 
 ## [0.0.6] - 2026-11-23
 

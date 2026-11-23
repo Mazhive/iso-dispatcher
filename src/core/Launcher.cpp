@@ -31,7 +31,14 @@ Launcher::Result Launcher::launchCommand(const QString &exec, const QStringList 
     }
     const QStringList args = substitute(argsTemplate, isoPath, entry);
     qint64 pid = 0;
-    const bool ok = QProcess::startDetached(exec, args, QFileInfo(isoPath).absolutePath(), &pid);
+    QProcess p;
+    p.setProgram(exec);
+    p.setArguments(args);
+    p.setWorkingDirectory(QFileInfo(isoPath).absolutePath());
+    p.setStandardOutputFile(QProcess::nullDevice());
+    p.setStandardErrorFile(QProcess::nullDevice());
+    p.setStandardInputFile(QProcess::nullDevice());
+    const bool ok = p.startDetached(&pid);
     r.ok = ok;
     r.pid = pid;
     r.message = ok ? QStringLiteral("launched %1 pid=%2").arg(exec).arg(pid)
