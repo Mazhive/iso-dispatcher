@@ -73,19 +73,20 @@ int Cli::run(const QStringList &args)
     if (cmd == QStringLiteral("forget")) return cmdForget(args.mid(2));
     if (cmd == QStringLiteral("export")) return cmdExport(args.mid(2));
     if (cmd == QStringLiteral("config")) return cmdConfig(args.mid(2));
-    if (cmd == QStringLiteral("about") || cmd == QStringLiteral("--about")) {
-        out << "iso-dispatcher - content-based ISO classifier/launcher\n\n"
-            << "De volgende emulators/applicaties zijn noodzakelijk voor iso-dispatcher om te functioneren:\n"
-            << "  - PS1 / PSX : DuckStation of RetroArch (PSX core)\n"
-            << "  - PS2       : PCSX2 of andere PS2-emulator\n"
-            << "  - PS3       : RPCS3\n"
-            << "  - PS4       : shadPS4 (shadPS4QtLauncher)\n"
-            << "  - PSP       : PPSSPP\n"
+    if (cmd == QStringLiteral("about") || cmd == QStringLiteral("--about") || cmd == QStringLiteral("--version") || cmd == QStringLiteral("-V")) {
+        out << "iso-dispatcher 0.0.1\n"
+            << "Content-based ISO classifier/launcher\n\n"
+            << "Required emulators/applications:\n"
+            << "  - PS1 / PSX  : DuckStation or RetroArch (PSX core)\n"
+            << "  - PS2        : PCSX2 or another PS2 emulator\n"
+            << "  - PS3        : RPCS3\n"
+            << "  - PS4        : shadPS4 (shadPS4QtLauncher)\n"
+            << "  - PSP        : PPSSPP\n"
             << "  - Wii/GameCube: Dolphin\n"
-            << "  - Xbox      : xemu of andere Xbox-emulator\n"
-            << "  - Amiga     : FS-UAE / UAE / RetroArch Amiga core\n"
-            << "  - PC/DOS    : DOSBox, Wine of native applicatie (afhankelijk van image)\n\n"
-            << "Configureer exacte paden/argumenten via 'Config bewerken' of ~/.config/iso-dispatcher.json.\n" << Qt::flush;
+            << "  - Xbox       : xemu or another Xbox emulator\n"
+            << "  - Amiga      : FS-UAE / UAE / RetroArch Amiga core\n"
+            << "  - PC/DOS     : DOSBox, Wine or native application (depending on image)\n\n"
+            << "Configure exact paths/arguments via Edit Config or ~/.config/iso-dispatcher.json.\n" << Qt::flush;
         return 0;
     }
 

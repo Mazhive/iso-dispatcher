@@ -257,7 +257,7 @@ void MainWindow::onAbout()
 {
     const QString text = trUi(
         QStringLiteral(
-            "<h3>iso-dispatcher</h3>"
+            "<h3>iso-dispatcher 0.0.1</h3>"
             "<p>Content-based ISO classifier/launcher.</p>"
             "<p><b>The following emulators/applications are required for iso-dispatcher to function:</b></p>"
             "<ul>"
@@ -273,7 +273,7 @@ void MainWindow::onAbout()
             "</ul>"
             "<p>Configure exact paths/arguments via <i>Edit Config</i> or in <code>~/.config/iso-dispatcher.json</code>.</p>"),
         QStringLiteral(
-            "<h3>iso-dispatcher</h3>"
+            "<h3>iso-dispatcher 0.0.1</h3>"
             "<p>Inhoudsgebaseerde ISO-classificeerder/launcher.</p>"
             "<p><b>De volgende emulators/applicaties zijn noodzakelijk voor iso-dispatcher om te functioneren:</b></p>"
             "<ul>"
