@@ -78,7 +78,7 @@ int Cli::run(const QStringList &args)
     if (cmd == QStringLiteral("export")) return cmdExport(args.mid(2));
     if (cmd == QStringLiteral("config")) return cmdConfig(args.mid(2));
     if (cmd == QStringLiteral("about") || cmd == QStringLiteral("--about") || cmd == QStringLiteral("--version") || cmd == QStringLiteral("-V")) {
-        out << "iso-dispatcher 0.0.2\n"
+        out << "iso-dispatcher 0.0.3\n"
             << "Content-based ISO classifier/launcher\n\n"
             << "Required emulators/applications:\n"
             << "  - PS1 / PSX  : DuckStation or RetroArch (PSX core)\n"

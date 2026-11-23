@@ -14,7 +14,8 @@
   - [x] A7: help/README bijgewerkt.
 - [x] Regressie boot-markers (sample 19/149 gevonden markers): 7x PS3 + 12x PS1 `classify` → alle OK, class/bootEntry correct. Geen `.ps2boot.iso`/`.pspboot.iso` markers gevonden in bibliotheek.
 - [x] B1 marker-maker ontwerp/scope + dry-run geïmplementeerd (`make-marker` subcommand, `MarkerMaker` core class).
-- [ ] Volgende: B2 entry-selectieregels verfijnen + B3 idempotent schrijven/rapportage; daarna B4 batch, Fase C `emu-launch.sh` adapter.
+- [x] B2 entry-selectieregels per systeem geverifieerd/werkend.
+- [ ] Volgende: B3 idempotent schrijven/rapportage (`--force`, unchanged/skip/overwrite), daarna B4 batch, Fase C `emu-launch.sh` adapter.
 
 ## Fase A — `iso-dispatcher` robuust maken (contract eerst)
 
@@ -72,11 +73,11 @@
 - [x] Test: `make-marker "/.../PSX/Ace_Combat_2" --class ps1 --dry-run` → status `proposed`, entry `Ace_Combat_2_[SCES-00699].cue`, marker `Ace_Combat_2.ps1boot.iso`, content getoond, `(dry-run) not writing`, exit 0. Zonder class: duidelijke fout "Provide --class <id>".
 
 ### B2. Entry-selectieregels per systeem
-- [ ] Wijziging: implementeer deterministische entry-selectie.
-- [ ] Regels: PS1/PS2 voorkeur `.cue` dan `.chd/.iso/.bin` (voorzichtig); PS3 JB `EBOOT.BIN`/`PS3_GAME/USRDIR/EBOOT.BIN`; PSP `.iso/.cso/.pbp` of `EBOOT.PBP`; generiek alleen bestaande relatieve paden.
-- [ ] Test 1: Ace Combat 2 map → kiest `.cue`.
-- [ ] Test 2: PS3 JB map → kiest EBOOT.
-- [ ] Test 3: map met meerdere gelijkwaardige kandidaten → geen schrijven, ambigu-fout/lijst.
+- [x] Wijziging: deterministische entry-selectie in `MarkerMaker` geverifieerd (PS1/PS2 cue-first, daarna chd/iso/bin; PS3 bekende EBOOT-paden; PSP iso/cso/pbp/EBOOT.PBP; generiek bestaande relatieve paden; boot-markers uitgesloten).
+- [x] Regels: PS1/PS2 voorkeur `.cue` dan `.chd/.iso/.bin` (voorzichtig); PS3 JB `EBOOT.BIN`/`PS3_GAME/USRDIR/EBOOT.BIN`; PSP `.iso/.cso/.pbp` of `EBOOT.PBP`; generiek alleen bestaande relatieve paden.
+- [x] Test 1: Ace Combat 2 map + `--class ps1 --dry-run` → kiest `.cue`, status proposed, geen write.
+- [x] Test 2: PS3 JB map `BLES00876-Toy Story 3` + `--class ps3 --dry-run` → kiest `PS3_GAME/USRDIR/EBOOT.BIN` (status unchanged, marker al up-to-date). Fresh temp PS3 JB → proposed met zelfde EBOOT-entry.
+- [x] Test 3: temp dir met `GameA.cue` + `GameB.cue` → status `ambiguous`, candidates-lijst, geen write.
 
 ### B3. Idempotent schrijven + rapportage
 - [ ] Wijziging: `--dry-run`, `--force`, leesbare rapportage/JSON. Bestaande correcte marker niet overschrijven.

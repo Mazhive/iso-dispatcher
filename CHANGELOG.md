@@ -4,10 +4,20 @@ All notable changes to `iso-dispatcher` are documented in this file.
 
 ## Versioning & builds
 
-- **Version**: `MAJOR.MINOR.PATCH` (current: `0.0.2`)
+- **Version**: `MAJOR.MINOR.PATCH` (current: `0.0.3`)
 - **Versioned builds**: place built binaries in `build/Build-versions/`
 - **Naming**: `iso-dispatcher-<version>-linux-x86_64` (append `-<shortsha>` or `-<date>` if needed for same-version dev snapshots)
 - **On new change/build**: bump version in source (`src/cli/Cli.cpp` about/version, `src/ui/MainWindow.cpp` About), update this changelog, rebuild, and copy the new binary to `build/Build-versions/` with the new version name. Keep previous versioned binaries for traceability.
+
+## [0.0.3] - 2026-11-23
+
+### Added
+- README (EN/NL): marker-maker documentation for `make-marker` command, flags, and deterministic entry-selection rules.
+
+### Verified (B2 entry-selection rules)
+- PS1/PS2: Ace Combat 2 map + `--class ps1 --dry-run` → kiest `.cue` (`proposed`, no write).
+- PS3 JB: `BLES00876-Toy Story 3` + `--class ps3 --dry-run` → kiest `PS3_GAME/USRDIR/EBOOT.BIN` (`unchanged`, existing marker up-to-date); fresh temp PS3 JB dir → `proposed` with same EBOOT entry.
+- Ambiguity: temp dir with multiple equal `.cue` candidates → `ambiguous`, candidate list, no write.
 
 ## [0.0.2] - 2026-11-23
 

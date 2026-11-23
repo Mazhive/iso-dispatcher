@@ -428,6 +428,20 @@ Supported validation:
 - Validation of referenced CUE files.
 - PSX alias support (`psx` → `ps1`).
 
+## Marker maker
+
+iso-dispatcher includes a `make-marker` CLI command to propose/create boot markers:
+
+```bash
+iso-dispatcher make-marker <path> [--class id|--system id] [--dry-run] [--json]
+```
+
+- `<path>` can be a game directory or a specific entry file.
+- `--dry-run` shows the proposed marker without writing.
+- `--json` outputs machine-readable results.
+- Deterministic entry selection: PS1/PS2 prefer `.cue`, then `.chd/.iso/.bin`; PS3 JB prefers `PS3_GAME/USRDIR/EBOOT.BIN`/`EBOOT.BIN`; PSP prefers `.iso/.cso/.pbp` or `EBOOT.PBP`.
+- Ambiguous candidates are reported as an error/list (no write).
+
 ---
 
 # Classification
@@ -901,6 +915,20 @@ De applicatie controleert:
 - Bestaan en leesbaarheid van de entry.
 - Verwijzingen naar bestanden in CUE-bestanden.
 - PSX-alias (`psx` → `ps1`).
+
+## Marker-maker
+
+iso-dispatcher bevat een `make-marker` CLI-commando om boot-markers voor te stellen/aan te maken:
+
+```bash
+iso-dispatcher make-marker <pad> [--class id|--system id] [--dry-run] [--json]
+```
+
+- `<pad>` kan een gamemap of een specifiek entry-bestand zijn.
+- `--dry-run` toont de voorgestelde marker zonder te schrijven.
+- `--json` geeft machine-leesbare output.
+- Deterministische entry-selectie: PS1/PS2 voorkeur `.cue`, daarna `.chd/.iso/.bin`; PS3 JB voorkeur `PS3_GAME/USRDIR/EBOOT.BIN`/`EBOOT.BIN`; PSP voorkeur `.iso/.cso/.pbp` of `EBOOT.PBP`.
+- Meerdere gelijkwaardige kandidaten geven een ambigu-fout/lijst (geen write).
 
 ---
 
