@@ -152,12 +152,12 @@
 - [ ] Test 2: marker launch gebruikt entry uit marker correct (door iso-dispatcher/emu-launch.sh pad; end-to-end GUI smoke nog nodig).
 
 ### D5. Metadata/titels/icons zonder emulation.conf
-- [ ] Wijziging: systeemtitels/icons uit fork-mapping/iso-dispatcher of eigen lichte mapping halen; niet afhankelijk van volledige emulation.conf voor ISO systems.
-- [ ] Test: nav toont correcte platform/systeemtitels en icons bij afwezigheid van ISO-conf entries.
+- [x] Wijziging: lichte `_SYSTEM_TITLES` mapping toegevoegd voor ISO/disc systemen; scanner gebruikt conf title of system-mapping fallback.
+- [ ] Test: nav toont correcte platform/systeemtitels/icons bij afwezigheid van ISO-conf entries (handmatige GUI-check).
 
 ### D6. Docs/changelog bijwerken
-- [ ] Wijziging: update `README-game-gui-fork.md`, relevante workflowdocs, `gui-version/changelog.md`.
-- [ ] Test: leescheck — docs beschrijven nieuwe flow (iso-dispatcher-first, marker-maker, fallback, psx/ps1 mapping).
+- [x] Wijziging: `README-game-gui-fork.md` en `gui-version/changelog.md` bijgewerkt met iso-dispatcher-first flow, `psx->ps1`, `ISO_DISPATCHER_BIN`, fallback/conf-tolerantie, marker-first scan.
+- [x] Test: leescheck OK (nieuwe flow beschreven).
 
 ## Fase E — Opschoning en regressie
 
