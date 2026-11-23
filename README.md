@@ -1,78 +1,256 @@
 # iso-dispatcher
 
-Content-only ISO classifier and launcher (Qt6 C++ GUI + CLI).
+**Content-based ISO classifier and launcher for Linux**
 
-## Purpose
+A Qt6 C++ application with both a graphical interface (GUI) and command-line interface (CLI).
 
-Determine the platform/type of an `.iso` **exclusively from its ISO contents** (magic bytes, PVD, root-directory records, bounded token scan). No path- or folder-name rules are used for classification. When confidence is low, the app asks the user and saves the choice in a knowledge file for future runs.
+iso-dispatcher identifies disc image formats by inspecting their contents rather than relying on filenames or directory paths. It can classify supported platforms and launch the corresponding emulator.
 
-## Main design rules
+When classification confidence is low, the application asks the user to select the correct platform and can remember that decision for future use.
 
-- **No path/folder classification**: the location on disk must not influence the decision.
-- **Bounded reads**: no full ISO scan. Default: 64 KB fast header + PVD + root-directory seek + 2 MB token window + limited tree metadata.
-- **No additional apt installation required**: Qt6 Core/Widgets + CMake + g++.
-- **Config**: `$HOME/.config/iso-dispatcher.json` (created automatically on first run).
-- **Knowledge**: JSON, in-memory `QHash`, batch save. SQLite is an optional future direction.
-- **Safety**: the launcher refuses `xdg-open`/`gio open`/`kde-open` to prevent recursion.
+## Features
 
-## Measured accuracy (library test, 176 ISOs)
+- Content-only ISO classification (no filename or directory-name rules).
+- Supports Nintendo Wii, Xbox, PlayStation 1, 2, 3, PSP and Commodore Amiga.
+- PC/UDF image detection.
+- GUI with drag-and-drop support.
+- Command-line interface.
+- Evidence-based classification with confidence scores.
+- Learning system that remembers user decisions.
+- Portable boot-marker support.
+- Bounded scanning for efficient ISO analysis.
+- Configurable emulator commands.
+- JSON configuration and knowledge database.
 
-Measurements on `path:/`:
+## Supported platforms
 
-| Scan window | Correct | Accuracy | Notes |
-|---|---:|---:|---|
-| 64 KB | 129/176 | 73.3% | Console formats are usually identified already |
-| 576 KB | 167/176 | 94.9% | 90% target achieved |
-| 1 MB | 168/176 | 95.5% | |
-| 2 MB | 169/176 | 96.0% | |
-| 2 MB + PVD root-directory seek | ~175/176 | ~99.4% | No path rules needed |
-| + bounded tree-walk metadata | 176/176 | 100% | Content-only |
+| Platform | Default application |
+|---|---|
+| Nintendo Wii | Dolphin |
+| Xbox | Xemu |
+| PlayStation 1 | DuckStation |
+| PlayStation 2 | PCSX2 |
+| PlayStation Portable | PPSSPP |
+| PlayStation 3 | RPCS3 |
+| Commodore Amiga | FS-UAE |
+| PC / UDF | Configurable image mounter |
 
-Important: the remaining “stubborn” ISOs had markers beyond 2 MB, but the PVD root-directory pointer pointed directly to them. That is why the probe uses a **PVD root seek** instead of continuing to read linearly.
+Emulators are optional. They are only required when you want to launch the corresponding image.
 
-## Classification pipeline
+---
 
-Order (the strongest signals carry the most weight):
+# Installation
 
-1. **Magic / file structure**: Wii magic `5D1C9EA3@0x1C`, 2352-sector PS1, UDF.
-2. **Raw token scan** (bounded): `MICROSOFT*XBOX*MEDIA`, `DEFAULT.XBE`.
-3. **PVD fields**: `system_id` (`PLAYSTATION`, `PSP GAME`, `AMIGA`), `volume_id`, `publisher`.
-4. **Root-directory records** via PVD LBA: `PS3_DISC.SFB`, `SETUP.EXE`, `AUTORUN.INF`, `*.CAB`, `*.SH`.
-5. **Bounded tree metadata** (`isoinfo -f`, max dirs): `*.EXE`, `*.INF`, `EBOOT.BIN`.
-6. **Knowledge weights** from `knowledge.json` (capped by `learn.max_db_share`).
-7. **Ask fallback** when the score is low or there is a tie.
+## 1. Dependencies
 
-## Known content signatures
+iso-dispatcher uses Qt6 and C++17.
 
-| Class | Signature | Example application |
+### Required build dependencies
+
+| Dependency | Purpose |
+|---|---|
+| C++17 compiler (g++) | Compile the application |
+| CMake 3.16+ | Build configuration |
+| Qt6 Core 6.2+ | Application framework |
+| Qt6 Widgets 6.2+ | Graphical interface |
+| Ninja or Make | Build system |
+
+### Optional runtime dependencies
+
+| Dependency | Purpose | Required |
 |---|---|---|
-| Wii | `file`/Wii disc image magic | `dolphin-emu %f` |
-| Xbox | `MICROSOFT*XBOX*MEDIA` + `DEFAULT.XBE` in the first 74 KB | `xemu %f` |
-| PS1 | 2352 sectors + `BOOT =`/`SYSTEM.CNF` | `duckstation %f` |
-| PS2 | PVD `system_id=PLAYSTATION` (+ optional `BOOT2 =`) | `pcsx2 %f` |
-| PSP | PVD `system_id=PSP GAME` | `ppsspp %f` |
-| PS3 | `PS3_DISC.SFB` in root/tree | `rpcs3 %f` |
-| Amiga | PVD `system_id=AMIGA` | `fs-uae %f` |
-| PC/UDF | UDF MIME, `SETUP.EXE/AUTORUN.INF/INSTALL.EXE`, `.CAB/.SH/.EXE` | `gnome-disk-image-mounter %f` |
+| `file` | Detect image formats and magic signatures | Recommended |
+| `isoinfo` | Inspect ISO directory metadata | Recommended |
+| Qt6 runtime libraries | Run the GUI application | Yes |
+| Emulator applications | Launch supported platforms | No |
 
-## Build
+**Important:** Without `isoinfo`, iso-dispatcher continues to work but has reduced directory-tree detection capabilities.
+
+Without `file`, some format signatures cannot be detected.
+
+---
+
+## 2. Install dependencies
+
+Choose the instructions for your Linux distribution.
+
+### Debian / Ubuntu / Linux Mint / Pop!_OS
+
+Update your package database:
 
 ```bash
-cd /mnt/VG_00/PUBLIC-LIBRARY/SRC/Own_Code/Iso-dispatcher
-cmake -S . -B build -G Ninja
-cmake --build build -j
+sudo apt update
+```
+
+Install dependencies:
+
+```bash
+sudo apt install -y \
+    build-essential \
+    cmake \
+    ninja-build \
+    qt6-base-dev \
+    pkg-config \
+    file \
+    genisoimage
+```
+
+`genisoimage` provides the `isoinfo` utility.
+
+### Arch Linux / CachyOS / EndeavourOS / Manjaro
+
+Update your system:
+
+```bash
+sudo pacman -Syu
+```
+
+Install dependencies:
+
+```bash
+sudo pacman -S --needed \
+    base-devel \
+    cmake \
+    ninja \
+    qt6-base \
+    pkgconf \
+    file \
+    cdrtools
+```
+
+`cdrtools` provides `isoinfo`.
+
+### Fedora / Red Hat based distributions
+
+For Fedora:
+
+```bash
+sudo dnf install -y \
+    gcc-c++ \
+    cmake \
+    ninja-build \
+    qt6-qtbase-devel \
+    pkgconf-pkg-config \
+    file \
+    genisoimage
+```
+
+For other Red Hat based distributions, package availability can differ. On RHEL-compatible systems, EPEL or additional repositories may be needed for some packages.
+
+### Verify dependencies
+
+Check the installed tools:
+
+```bash
+g++ --version
+cmake --version
+ninja --version
+pkg-config --modversion Qt6Core
+pkg-config --modversion Qt6Widgets
+file --version
+isoinfo --version
+```
+
+If `isoinfo` is unavailable, check that the appropriate ISO utility package is installed.
+
+---
+
+# Building from source
+
+## 1. Clone the repository
+
+```bash
+git clone https://github.com/Mazhive/iso-dispatcher.git
+cd iso-dispatcher
+```
+
+## 2. Build
+
+The included build script automatically detects Ninja and falls back to Make if Ninja is unavailable.
+
+```bash
+chmod +x build.sh
+./build.sh
+```
+
+The resulting executable will be placed in:
+
+```text
+build/iso-dispatcher
+```
+
+## 3. Run
+
+Start the graphical application:
+
+```bash
+./build/iso-dispatcher
+```
+
+Check the CLI:
+
+```bash
 ./build/iso-dispatcher --help
 ```
 
-Requirements (available on the target system): Qt6 Core/Widgets 6.x, CMake, g++, ninja/make.
+## Alternative: Manual CMake build
+
+```bash
+cmake -S . -B build -G Ninja
+cmake --build build -j"$(nproc)"
+```
+
+To install system-wide:
+
+```bash
+sudo cmake --install build
+```
+
+The default installation prefix is `/usr/local`.
+
+---
+
+# Optional emulator installation
+
+Emulators are independent applications and are not bundled with iso-dispatcher.
+
+Install the emulators you want to use separately.
+
+| Platform | Emulator | Executable |
+|---|---|---|
+| Wii | Dolphin | `dolphin-emu` |
+| Xbox | Xemu | `xemu` |
+| PS1 | DuckStation | `duckstation` |
+| PS2 | PCSX2 | `pcsx2` |
+| PSP | PPSSPP | `ppsspp` |
+| PS3 | RPCS3 | `rpcs3` |
+| Amiga | FS-UAE | `fs-uae` |
+
+Package availability varies between distributions. Some emulators may require Flatpak, AppImage or installation from their official repositories.
+
+Make sure the executable names match the commands configured in iso-dispatcher.
+
+---
+
+# Usage
+
+## GUI
+
+- Select an ISO file or drag it into the path field.
+- Click **Scan** to inspect the image.
+- Review the classification evidence and confidence score.
+- Click **Launch selected** to start the configured application.
+- Use **Remember selected for this file** to save a classification decision.
+
+When classification confidence is insufficient, iso-dispatcher displays a selection dialog.
 
 ## CLI
 
 ```bash
-iso-dispatcher                              # GUI
-iso-dispatcher gui [file.iso]               # GUI with preload
-iso-dispatcher classify <file.iso>          # JSON decision
-iso-dispatcher why <file.iso>               # full score/evidence
+iso-dispatcher
+iso-dispatcher gui [file.iso]
+iso-dispatcher classify <file.iso>
+iso-dispatcher why <file.iso>
 iso-dispatcher launch <file.iso> [--class id] [--dry-run]
 iso-dispatcher learn <dir> [--dry-run] [--limit N]
 iso-dispatcher stats
@@ -80,16 +258,71 @@ iso-dispatcher decisions [N]
 iso-dispatcher forget <fingerprint>
 iso-dispatcher export <path.json>
 iso-dispatcher config path|init|get|set
-iso-dispatcher --help | -h | ?
+iso-dispatcher --help
 ```
 
-Exit codes: `0=ok`, `1=general/usage error`, `2=marker invalid`, `3=entry/reference missing or invalid`, `4=class unknown/not configured`, `5=emulator/exec missing or launch failed`.
+### Exit codes
 
-## Boot markers
+| Code | Meaning |
+|---|---|
+| 0 | Success |
+| 1 | General or usage error |
+| 2 | Invalid boot marker |
+| 3 | Missing or invalid entry/reference |
+| 4 | Unknown or unconfigured class |
+| 5 | Emulator missing or launch failure |
 
-`iso-dispatcher` supports portable boot markers (text files starting with `ISO-DISPATCHER-BOOT`).
+---
 
-Format:
+# Configuration
+
+Configuration is automatically created on first launch.
+
+Location:
+
+```text
+~/.config/iso-dispatcher.json
+```
+
+The knowledge database is stored at:
+
+```text
+~/.local/share/iso-dispatcher/knowledge.json
+```
+
+The configuration allows you to customize:
+
+- ISO scanning limits.
+- Classification confidence thresholds.
+- Learning behaviour.
+- Emulator executable paths.
+- Emulator launch arguments.
+- Fallback actions.
+- Language settings.
+
+Arguments support:
+
+- `%f` — ISO file path.
+- `%e` — Boot-marker entry path.
+
+Example:
+
+```json
+{
+  "id": "ps2",
+  "label": "PlayStation 2",
+  "exec": "pcsx2",
+  "args": ["%f"]
+}
+```
+
+---
+
+# Boot markers
+
+iso-dispatcher supports portable boot markers.
+
+Example:
 
 ```text
 ISO-DISPATCHER-BOOT
@@ -97,120 +330,93 @@ class=ps1
 entry=Game.cue
 ```
 
-Validation before launch/classify decision:
-- required `class` and `entry` (or known auto-resolve for PS2/PS3/PS4 layouts)
-- `entry` must be relative/safe (no absolute path, no `..` traversal)
-- entry must exist and be readable
-- for `.cue` entries, referenced `FILE` targets are validated
-- class alias: `psx -> ps1`
+Supported validation:
 
-## GUI
+- Required `class` and `entry` fields.
+- Relative and safe entry paths.
+- Entry existence and readability.
+- Validation of referenced CUE files.
+- PSX alias support (`psx` → `ps1`).
 
-- Select a file / drag it into the path field.
-- `Scan`: displays evidence (magic, PVD, root, features) and the score table.
-- `Launch selected`: starts the selected class; when confidence is low, it displays AskDialog.
-- `Remember selected for this file`: saves the fingerprint-to-class mapping.
+---
 
-AskDialog displays the evidence, lets the user choose a class, and can remember the fingerprint/signature.
+# Classification
 
-## Configuration (`$HOME/.config/iso-dispatcher.json`)
+iso-dispatcher uses multiple content-based detection methods:
 
-Created automatically with defaults. Important fields:
+1. Magic bytes and image structure.
+2. Bounded token scanning.
+3. ISO Primary Volume Descriptor (PVD).
+4. Root-directory records.
+5. Bounded directory-tree metadata using `isoinfo`.
+6. Previously learned classification weights.
+7. User selection when confidence is insufficient.
 
-```json
-{
-  "scan": {
-    "fast_bytes": 65536,
-    "window_bytes": 2097152,
-    "pvd_record_offset": 32924,
-    "root_dir_bytes": 8192,
-    "max_dirs": 64,
-    "use_file_probe": true
-  },
-  "ask": {
-    "enabled": true,
-    "min_score": 70,
-    "tie_margin": 10,
-    "headless": "menu",
-    "show_evidence": true,
-    "remember_file": true,
-    "remember_signature": false,
-    "negative_cache_hours": 24
-  },
-  "learn": {
-    "enabled": true,
-    "db": "~/.local/share/iso-dispatcher/knowledge.json",
-    "alpha": 1.0,
-    "half_life_days": 180,
-    "min_votes": 3,
-    "auto_launch_weight": 0.0,
-    "override_weight": 1.5,
-    "max_db_share": 0.4,
-    "target_accuracy": 0.90
-  },
-  "fallback": { "action": "ask", "else": ["gnome-disk-image-mounter", "%f"] },
-  "classes": [ /* see default config in src/core/Config.cpp */ ]
-}
+No filename or directory-name rules are used.
+
+## Measured accuracy
+
+Library test using 176 ISO images:
+
+| Scan method | Accuracy |
+|---|---:|
+| 64 KB | 73.3% |
+| 576 KB | 94.9% |
+| 1 MB | 95.5% |
+| 2 MB | 96.0% |
+| 2 MB + PVD root seek | ~99.4% |
+| + bounded tree metadata | 100% |
+
+These are results from the tested library, not a guarantee for every ISO collection.
+
+---
+
+# Troubleshooting
+
+### Qt6 not found
+
+Make sure the Qt6 development packages are installed.
+
+```bash
+pkg-config --modversion Qt6Core
+pkg-config --modversion Qt6Widgets
 ```
 
-`config set` supports dot-like keys through `/` in the internal implementation (`scan/window_bytes`). Use the exact key implemented by the CLI.
+### isoinfo not found
 
-## Knowledge JSON
+Install the ISO utility package for your distribution.
 
-Default path: `~/.local/share/iso-dispatcher/knowledge.json`.
+- Debian/Ubuntu: `genisoimage`
+- Arch/CachyOS: `cdrtools`
+- Fedora: `genisoimage`
 
-Structure:
+### Emulator does not start
 
-```json
-{
-  "version": 1,
-  "fingerprints": { "<fp>": "ps2" },
-  "negative_cache": { "<fp>": 1760000000 },
-  "weights": {
-    "pvd.system_id=PLAYSTATION": {
-      "ps2": { "pos": 8, "neg": 0, "updated": "..." }
-    }
-  },
-  "decisions": [
-    { "at": "...", "fingerprint": "...", "chosen": "ps2", "prompted": false, "overridden": false }
-  ]
-}
+Check whether the executable is available:
+
+```bash
+command -v dolphin-emu
+command -v pcsx2
+command -v duckstation
+command -v rpcs3
 ```
 
-Weight: `log((pos + alpha) / (neg + alpha))`, active only when `pos+neg >= min_votes`. The database contribution is capped by `max_db_share` so it cannot override deterministic rules.
+Also verify the executable and arguments in the configuration file.
 
-## Modules
+### Debugging commands
 
-| File | Role |
-|---|---|
-| `src/core/Types.h` | Data types: Feature, Rule, ClassDef, ProbeResult, Decision |
-| `src/core/Util.*` | ISO string cleanup, wildcard matching, timestamps |
-| `src/core/Config.*` | Load/save JSON config, defaults, get/set |
-| `src/core/IsoProbe.*` | Content-only probe: magic, PVD, root-directory seek, bounded token/tree scan |
-| `src/core/Classifier.*` | Rules + database weights + confidence/ask decision |
-| `src/core/Knowledge.*` | JSON knowledge base, fingerprint overrides, negative cache, stats |
-| `src/core/Launcher.*` | Detached launch with `%f/%e` substitution; no recursive openers |
-| `src/cli/Cli.*` | CLI commands, help, terminal prompt |
-| `src/ui/AskDialog.*` | Qt dialog for uncertain classifications |
-| `src/ui/MainWindow.*` | GUI scan/score/launch/remember |
-| `src/app/App.*` | GUI/CLI bootstrap, config/knowledge initialization |
-| `src/main.cpp` | Entry point |
+```bash
+iso-dispatcher why file.iso
+iso-dispatcher stats
+iso-dispatcher decisions 20
+iso-dispatcher learn /path/to/isos --dry-run
+```
 
-## Debugging
+---
 
-- `iso-dispatcher why file.iso` displays evidence and score breakdown.
-- `iso-dispatcher stats` displays the knowledge overview.
-- `iso-dispatcher decisions 20` displays recent choices/overrides.
-- `iso-dispatcher learn <dir> --dry-run` tests batch classification without learning.
-- Regression test: a Wii image in an oddly named folder must still be classified as Wii; the path must never take precedence.
+# License
 
-## Known limitations / next steps
-
-- `isoinfo -f` is used for bounded tree metadata; if `isoinfo` is missing, the probe falls back to root/PVD/token features.
-- The current knowledge write mechanism uses simple JSON; migrate to SQLite for very large datasets (>50k).
-- Extracted PS3 folders (`EBOOT.BIN`) are not ISOs; a separate folder handler may be added later.
-- `config set` type detection is simple (bool/int/double/string).
-- For distribution: test the `.desktop` file and MIME/handler integration separately; never run `xdg-open` on the same ISO from its handler.
+See the repository for licensing information.
 
 ---
 
@@ -218,79 +424,239 @@ Weight: `log((pos + alpha) / (neg + alpha))`, active only when `pos+neg >= min_v
 
 # iso-dispatcher
 
-Inhoudsgebaseerde ISO-classificatie en launcher (Qt6 C++ GUI + CLI).
+**Inhoudsgebaseerde ISO-classificatie en launcher voor Linux**
 
-## Doel
+Een Qt6 C++-applicatie met zowel een grafische interface (GUI) als een command-line interface (CLI).
 
-Bepaal het platform/type van een `.iso` **uitsluitend op basis van de ISO-inhoud** (magic bytes, PVD, root-directory-records en een begrensde token-scan). Er worden **geen pad- of mapnaamregels** gebruikt voor de classificatie. Bij een lage betrouwbaarheid vraagt de app de gebruiker om een keuze en slaat deze op in een kennisbestand voor volgende keren.
+iso-dispatcher herkent ISO-bestanden door de inhoud te onderzoeken, zonder afhankelijk te zijn van bestandsnamen of mapnamen.
 
-## Belangrijkste ontwerpregels
+Bij onvoldoende herkenningszekerheid vraagt de applicatie de gebruiker om een keuze. Deze keuze kan worden onthouden voor toekomstige scans.
 
-- **Geen classificatie op basis van pad/map**: de locatie op schijf mag de beslissing niet beïnvloeden.
-- **Begrensde leesacties**: geen volledige ISO-scan. Standaard: 64 KB snelle header + PVD + seek naar de root-directory + 2 MB token-venster + beperkte tree-metadata.
-- **Geen extra apt-installatie nodig**: Qt6 Core/Widgets + CMake + g++.
-- **Configuratie**: `$HOME/.config/iso-dispatcher.json` (wordt automatisch aangemaakt bij de eerste start).
-- **Kennis**: JSON, `QHash` in het geheugen en opslaan in batches. SQLite is een mogelijke uitbreiding voor later.
-- **Veiligheid**: de launcher weigert `xdg-open`/`gio open`/`kde-open` om recursie te voorkomen.
+## Functies
 
-## Gemeten nauwkeurigheid (bibliotheektest, 176 ISO's)
+- ISO-classificatie op basis van inhoud.
+- Ondersteuning voor Wii, Xbox, PlayStation 1, 2, 3, PSP en Commodore Amiga.
+- Detectie van PC/UDF-images.
+- Grafische interface met drag-and-drop.
+- Command-line interface.
+- Classificatie met bewijs en betrouwbaarheidsscores.
+- Leersysteem dat gebruikerskeuzes onthoudt.
+- Ondersteuning voor portable boot-markers.
+- Begrensde scans voor efficiënte verwerking.
+- Configureerbare emulatorcommando's.
+- JSON-configuratie en kennisdatabase.
 
-Metingen op `pad:/`:
+## Ondersteunde platforms
 
-| Scanvenster | Correct | Nauwkeurigheid | Opmerking |
-|---|---:|---:|---|
-| 64 KB | 129/176 | 73,3% | Consoleformaten worden meestal al herkend |
-| 576 KB | 167/176 | 94,9% | Doel van 90% bereikt |
-| 1 MB | 168/176 | 95,5% | |
-| 2 MB | 169/176 | 96,0% | |
-| 2 MB + PVD root-directory seek | ~175/176 | ~99,4% | Geen padregels nodig |
-| + begrensde tree-walk-metadata | 176/176 | 100% | Alleen op basis van inhoud |
+| Platform | Standaardapplicatie |
+|---|---|
+| Nintendo Wii | Dolphin |
+| Xbox | Xemu |
+| PlayStation 1 | DuckStation |
+| PlayStation 2 | PCSX2 |
+| PlayStation Portable | PPSSPP |
+| PlayStation 3 | RPCS3 |
+| Commodore Amiga | FS-UAE |
+| PC / UDF | Configureerbare image-mounter |
 
-Belangrijk: de resterende “lastige” ISO's hadden markers buiten de eerste 2 MB, maar de root-directory-pointer in de PVD verwees er rechtstreeks naar. Daarom gebruikt de probe een **PVD root-seek** in plaats van lineair verder te lezen.
+Emulators zijn optioneel en alleen nodig wanneer je de betreffende images wilt starten.
 
-## Classificatieketen
+---
 
-Volgorde (de sterkste signalen wegen het zwaarst):
+# Installatie
 
-1. **Magic / bestandsstructuur**: Wii-magic `5D1C9EA3@0x1C`, PS1 met sectoren van 2352 bytes, UDF.
-2. **Ruwe token-scan** (begrensd): `MICROSOFT*XBOX*MEDIA`, `DEFAULT.XBE`.
-3. **PVD-velden**: `system_id` (`PLAYSTATION`, `PSP GAME`, `AMIGA`), `volume_id`, `publisher`.
-4. **Root-directory-records** via PVD LBA: `PS3_DISC.SFB`, `SETUP.EXE`, `AUTORUN.INF`, `*.CAB`, `*.SH`.
-5. **Begrensde tree-metadata** (`isoinfo -f`, maximaal aantal mappen): `*.EXE`, `*.INF`, `EBOOT.BIN`.
-6. **Kennisgewichten** uit `knowledge.json` (begrensd door `learn.max_db_share`).
-7. **Vraag-terugval** bij een lage score of gelijke stand.
+## 1. Dependencies
 
-## Bekende inhoudssignaturen
+iso-dispatcher gebruikt Qt6 en C++17.
 
-| Klasse | Signatuur | Voorbeeldapplicatie |
+### Verplichte build-dependencies
+
+| Dependency | Functie |
+|---|---|
+| C++17 compiler (g++) | Applicatie compileren |
+| CMake 3.16+ | Buildconfiguratie |
+| Qt6 Core 6.2+ | Applicatieframework |
+| Qt6 Widgets 6.2+ | Grafische interface |
+| Ninja of Make | Build-systeem |
+
+### Optionele runtime-dependencies
+
+| Dependency | Functie | Verplicht |
 |---|---|---|
-| Wii | `file`/Wii-discimage-magic | `dolphin-emu %f` |
-| Xbox | `MICROSOFT*XBOX*MEDIA` + `DEFAULT.XBE` in de eerste 74 KB | `xemu %f` |
-| PS1 | 2352-sectoren + `BOOT =`/`SYSTEM.CNF` | `duckstation %f` |
-| PS2 | PVD `system_id=PLAYSTATION` (+ optioneel `BOOT2 =`) | `pcsx2 %f` |
-| PSP | PVD `system_id=PSP GAME` | `ppsspp %f` |
-| PS3 | `PS3_DISC.SFB` in root/tree | `rpcs3 %f` |
-| Amiga | PVD `system_id=AMIGA` | `fs-uae %f` |
-| PC/UDF | UDF-MIME, `SETUP.EXE/AUTORUN.INF/INSTALL.EXE`, `.CAB/.SH/.EXE` | `gnome-disk-image-mounter %f` |
+| `file` | Herkennen van imageformaten en signatures | Aanbevolen |
+| `isoinfo` | ISO-directorymetadata uitlezen | Aanbevolen |
+| Qt6 runtime libraries | GUI-applicatie uitvoeren | Ja |
+| Emulatorapplicaties | Ondersteunde platforms starten | Nee |
 
-## Bouwen
+**Belangrijk:** Zonder `isoinfo` blijft iso-dispatcher werken, maar is de detectie van directorystructuren beperkter.
+
+Zonder `file` kunnen bepaalde formatsignatures niet worden herkend.
+
+---
+
+## 2. Dependencies installeren
+
+Kies de instructies voor jouw Linux-distributie.
+
+### Debian / Ubuntu / Linux Mint / Pop!_OS
 
 ```bash
-cd /mnt/VG_00/PUBLIC-LIBRARY/SRC/Own_Code/Iso-dispatcher
-cmake -S . -B build -G Ninja
-cmake --build build -j
+sudo apt update
+
+sudo apt install -y \
+    build-essential \
+    cmake \
+    ninja-build \
+    qt6-base-dev \
+    pkg-config \
+    file \
+    genisoimage
+```
+
+`genisoimage` levert het programma `isoinfo`.
+
+### Arch Linux / CachyOS / EndeavourOS / Manjaro
+
+```bash
+sudo pacman -Syu
+
+sudo pacman -S --needed \
+    base-devel \
+    cmake \
+    ninja \
+    qt6-base \
+    pkgconf \
+    file \
+    cdrtools
+```
+
+`cdrtools` levert het programma `isoinfo`.
+
+### Fedora / Red Hat gebaseerde distributies
+
+Voor Fedora:
+
+```bash
+sudo dnf install -y \
+    gcc-c++ \
+    cmake \
+    ninja-build \
+    qt6-qtbase-devel \
+    pkgconf-pkg-config \
+    file \
+    genisoimage
+```
+
+Voor andere Red Hat gebaseerde distributies kunnen de pakketnamen verschillen. Op RHEL-compatibele systemen kunnen EPEL of aanvullende repositories nodig zijn.
+
+### Dependencies controleren
+
+```bash
+g++ --version
+cmake --version
+ninja --version
+pkg-config --modversion Qt6Core
+pkg-config --modversion Qt6Widgets
+file --version
+isoinfo --version
+```
+
+---
+
+# Compileren vanuit de broncode
+
+## 1. Repository downloaden
+
+```bash
+git clone https://github.com/Mazhive/iso-dispatcher.git
+cd iso-dispatcher
+```
+
+## 2. Compileren
+
+```bash
+chmod +x build.sh
+./build.sh
+```
+
+Het buildscript detecteert automatisch Ninja en gebruikt anders Make.
+
+De uitvoerbare applicatie wordt geplaatst in:
+
+```text
+build/iso-dispatcher
+```
+
+## 3. Starten
+
+Grafische interface:
+
+```bash
+./build/iso-dispatcher
+```
+
+CLI-help:
+
+```bash
 ./build/iso-dispatcher --help
 ```
 
-Vereisten (aanwezig op het doelsysteem): Qt6 Core/Widgets 6.x, CMake, g++, ninja/make.
+## Alternatief: Handmatig compileren met CMake
+
+```bash
+cmake -S . -B build -G Ninja
+cmake --build build -j"$(nproc)"
+```
+
+Systeemwijd installeren:
+
+```bash
+sudo cmake --install build
+```
+
+De standaardinstallatielocatie is `/usr/local`.
+
+---
+
+# Optionele emulatorinstallatie
+
+Emulators zijn afzonderlijke applicaties en worden niet meegeleverd met iso-dispatcher.
+
+| Platform | Emulator | Uitvoerbaar bestand |
+|---|---|---|
+| Wii | Dolphin | `dolphin-emu` |
+| Xbox | Xemu | `xemu` |
+| PS1 | DuckStation | `duckstation` |
+| PS2 | PCSX2 | `pcsx2` |
+| PSP | PPSSPP | `ppsspp` |
+| PS3 | RPCS3 | `rpcs3` |
+| Amiga | FS-UAE | `fs-uae` |
+
+Installeer alleen de emulators die je daadwerkelijk wilt gebruiken.
+
+De beschikbaarheid verschilt per distributie. Sommige emulators vereisen Flatpak, AppImage of installatie vanuit hun officiële repositories.
+
+---
+
+# Gebruik
+
+## GUI
+
+- Selecteer een ISO-bestand of sleep het naar het padveld.
+- Klik op **Scan** om het image te onderzoeken.
+- Bekijk de herkenningsresultaten en betrouwbaarheidsscore.
+- Klik op **Launch selected** om de applicatie te starten.
+- Gebruik **Remember selected for this file** om een keuze te onthouden.
+
+Bij onvoldoende herkenningszekerheid verschijnt een selectiedialoog.
 
 ## CLI
 
 ```bash
-iso-dispatcher                              # GUI
-iso-dispatcher gui [file.iso]               # GUI met vooraf geladen bestand
-iso-dispatcher classify <file.iso>          # JSON-beslissing
-iso-dispatcher why <file.iso>               # volledige score/bewijs
+iso-dispatcher
+iso-dispatcher gui [file.iso]
+iso-dispatcher classify <file.iso>
+iso-dispatcher why <file.iso>
 iso-dispatcher launch <file.iso> [--class id] [--dry-run]
 iso-dispatcher learn <dir> [--dry-run] [--limit N]
 iso-dispatcher stats
@@ -298,16 +664,49 @@ iso-dispatcher decisions [N]
 iso-dispatcher forget <fingerprint>
 iso-dispatcher export <path.json>
 iso-dispatcher config path|init|get|set
-iso-dispatcher --help | -h | ?
+iso-dispatcher --help
 ```
 
-Exitcodes: `0=ok`, `1=algemene/gebruikersfout`, `2=marker ongeldig`, `3=entry/referentie ontbreekt of ongeldig`, `4=class onbekend/niet geconfigureerd`, `5=emulator/exec ontbreekt of starten mislukt`.
+---
 
-## Boot markers
+# Configuratie
 
-`iso-dispatcher` ondersteunt portable boot-markers (tekstbestanden die beginnen met `ISO-DISPATCHER-BOOT`).
+De configuratie wordt automatisch aangemaakt bij de eerste start.
 
-Formaat:
+Configuratiebestand:
+
+```text
+~/.config/iso-dispatcher.json
+```
+
+Kennisdatabase:
+
+```text
+~/.local/share/iso-dispatcher/knowledge.json
+```
+
+Je kunt onder andere het volgende configureren:
+
+- ISO-scanlimieten.
+- Betrouwbaarheidsdrempels.
+- Leergedrag.
+- Emulatorpaden.
+- Emulatorargumenten.
+- Terugvalacties.
+- Taalinstellingen.
+
+Argumenten ondersteunen:
+
+- `%f` — Pad naar het ISO-bestand.
+- `%e` — Pad naar de boot-marker-entry.
+
+---
+
+# Boot markers
+
+iso-dispatcher ondersteunt portable boot-markers.
+
+Voorbeeld:
 
 ```text
 ISO-DISPATCHER-BOOT
@@ -315,117 +714,90 @@ class=ps1
 entry=Game.cue
 ```
 
-Validatie voor launch/classify:
-- verplichte velden `class` en `entry` (of bekende auto-resolve voor PS2/PS3/PS4 layouts)
-- `entry` moet relatief/veilig zijn (geen absoluut pad, geen `..` traversal)
-- entry moet bestaan en leesbaar zijn
-- voor `.cue` entries worden `FILE`-referenties gevalideerd
-- class-alias: `psx -> ps1`
+De applicatie controleert:
 
-## GUI
+- Verplichte velden `class` en `entry`.
+- Veilige relatieve paden.
+- Bestaan en leesbaarheid van de entry.
+- Verwijzingen naar bestanden in CUE-bestanden.
+- PSX-alias (`psx` → `ps1`).
 
-- Bestand kiezen / naar het padveld slepen.
-- `Scan`: toont het bewijs (magic, PVD, root, features) en de scoretabel.
-- `Launch selected`: start de geselecteerde klasse; bij lage betrouwbaarheid wordt AskDialog getoond.
-- `Remember selected for this file`: slaat de koppeling fingerprint->klasse op.
+---
 
-AskDialog toont het bewijs, laat de gebruiker een klasse kiezen en kan de fingerprint/signature onthouden.
+# Classificatie
 
-## Configuratie (`$HOME/.config/iso-dispatcher.json`)
+iso-dispatcher gebruikt meerdere detectiemethoden:
 
-Wordt automatisch met standaardwaarden aangemaakt. Belangrijke velden:
+1. Magic bytes en bestandsstructuur.
+2. Begrensde token-scans.
+3. ISO Primary Volume Descriptor (PVD).
+4. Root-directory-records.
+5. Begrensde directory-tree-metadata via `isoinfo`.
+6. Eerder geleerde classificatiegewichten.
+7. Gebruikerskeuze bij onvoldoende zekerheid.
 
-```json
-{
-  "scan": {
-    "fast_bytes": 65536,
-    "window_bytes": 2097152,
-    "pvd_record_offset": 32924,
-    "root_dir_bytes": 8192,
-    "max_dirs": 64,
-    "use_file_probe": true
-  },
-  "ask": {
-    "enabled": true,
-    "min_score": 70,
-    "tie_margin": 10,
-    "headless": "menu",
-    "show_evidence": true,
-    "remember_file": true,
-    "remember_signature": false,
-    "negative_cache_hours": 24
-  },
-  "learn": {
-    "enabled": true,
-    "db": "~/.local/share/iso-dispatcher/knowledge.json",
-    "alpha": 1.0,
-    "half_life_days": 180,
-    "min_votes": 3,
-    "auto_launch_weight": 0.0,
-    "override_weight": 1.5,
-    "max_db_share": 0.4,
-    "target_accuracy": 0.90
-  },
-  "fallback": { "action": "ask", "else": ["gnome-disk-image-mounter", "%f"] },
-  "classes": [ /* zie standaardconfiguratie in src/core/Config.cpp */ ]
-}
+Bestandsnamen en mapnamen worden nooit gebruikt voor classificatie.
+
+## Gemeten nauwkeurigheid
+
+Test met een bibliotheek van 176 ISO-images:
+
+| Scanmethode | Nauwkeurigheid |
+|---|---:|
+| 64 KB | 73,3% |
+| 576 KB | 94,9% |
+| 1 MB | 95,5% |
+| 2 MB | 96,0% |
+| 2 MB + PVD root seek | ~99,4% |
+| + begrensde tree-metadata | 100% |
+
+Dit zijn testresultaten van de gebruikte bibliotheek, geen garantie voor iedere ISO-collectie.
+
+---
+
+# Problemen oplossen
+
+### Qt6 niet gevonden
+
+Controleer of de Qt6-developmentpakketten zijn geïnstalleerd.
+
+```bash
+pkg-config --modversion Qt6Core
+pkg-config --modversion Qt6Widgets
 ```
 
-`config set` ondersteunt intern sleutels met een padachtige notatie via `/` (bijvoorbeeld `scan/window_bytes`). Gebruik in de CLI exact de sleutel zoals die in de implementatie is vastgelegd.
+### isoinfo niet gevonden
 
-## Knowledge JSON
+Installeer het ISO-utilitypakket voor jouw distributie:
 
-Standaardpad: `~/.local/share/iso-dispatcher/knowledge.json`.
+- Debian/Ubuntu: `genisoimage`
+- Arch/CachyOS: `cdrtools`
+- Fedora: `genisoimage`
 
-Structuur:
+### Emulator start niet
 
-```json
-{
-  "version": 1,
-  "fingerprints": { "<fp>": "ps2" },
-  "negative_cache": { "<fp>": 1760000000 },
-  "weights": {
-    "pvd.system_id=PLAYSTATION": {
-      "ps2": { "pos": 8, "neg": 0, "updated": "..." }
-    }
-  },
-  "decisions": [
-    { "at": "...", "fingerprint": "...", "chosen": "ps2", "prompted": false, "overridden": false }
-  ]
-}
+Controleer of het uitvoerbare bestand beschikbaar is:
+
+```bash
+command -v dolphin-emu
+command -v pcsx2
+command -v duckstation
+command -v rpcs3
 ```
 
-Gewicht: `log((pos + alpha) / (neg + alpha))`; alleen actief wanneer `pos+neg >= min_votes`. De bijdrage van de database wordt begrensd door `max_db_share`, zodat deze de deterministische regels niet kan overrulen.
+Controleer ook de emulatorinstellingen en argumenten in het configuratiebestand.
 
-## Modules
+### Debugcommando's
 
-| Bestand | Rol |
-|---|---|
-| `src/core/Types.h` | Datatypes: Feature, Rule, ClassDef, ProbeResult, Decision |
-| `src/core/Util.*` | Opschonen van ISO-strings, wildcardmatching, tijdstempels |
-| `src/core/Config.*` | JSON-configuratie laden/opslaan, standaardwaarden, get/set |
-| `src/core/IsoProbe.*` | Inhoudsgebaseerde probe: magic, PVD, root-directory-seek, begrensde token/tree-scan |
-| `src/core/Classifier.*` | Regels + databasegewichten + betrouwbaarheids-/vraagbeslissing |
-| `src/core/Knowledge.*` | JSON-kennisbank, fingerprint-overrides, negatieve cache, statistieken |
-| `src/core/Launcher.*` | Losgekoppeld starten met `%f/%e`-vervanging; geen recursieve openers |
-| `src/cli/Cli.*` | CLI-commando's, help, terminalprompt |
-| `src/ui/AskDialog.*` | Qt-dialoogvenster bij onzekere classificatie |
-| `src/ui/MainWindow.*` | GUI-scan/score/start/onthouden |
-| `src/app/App.*` | GUI/CLI-bootstrap, initialisatie van configuratie en kennisbank |
-| `src/main.cpp` | Startpunt |
+```bash
+iso-dispatcher why file.iso
+iso-dispatcher stats
+iso-dispatcher decisions 20
+iso-dispatcher learn /path/to/isos --dry-run
+```
 
-## Debuggen
+---
 
-- `iso-dispatcher why file.iso` toont het bewijs en de uitsplitsing van de score.
-- `iso-dispatcher stats` toont het kennisoverzicht.
-- `iso-dispatcher decisions 20` toont recente keuzes/overrides.
-- `iso-dispatcher learn <dir> --dry-run` test batchclassificatie zonder iets te leren.
-- Regressietest: een Wii-image in een vreemd benoemde map moet Wii blijven; het pad mag nooit doorslaggevend zijn.
+# Licentie
 
-## Bekende beperkingen / volgende stappen
-
-- `isoinfo -f` wordt gebruikt voor begrensde tree-metadata. Als `isoinfo` ontbreekt, valt de probe terug op root/PVD/token-features.
-- De huidige opslag van kennis gebruikt eenvoudige JSON; bij zeer grote datasets (>50k) migreren naar SQLite.
-- Uitgepakte PS3-mappen (`EBOOT.BIN`) zijn geen ISO's; later kan een aparte map-handler worden toegevoegd.
-- De typeherkenning van `config set` is eenvoudig (bool/int/double/string).
-- Voor distributie: test het `.desktop`-bestand en de MIME-/handlerintegratie afzonderlijk; voer nooit `xdg-open` uit op dezelfde ISO vanuit de handler.
+Zie de repository voor informatie over de licentie.
