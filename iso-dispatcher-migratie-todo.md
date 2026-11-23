@@ -16,7 +16,8 @@
 - [x] B1 marker-maker ontwerp/scope + dry-run geïmplementeerd (`make-marker` subcommand, `MarkerMaker` core class).
 - [x] B2 entry-selectieregels per systeem geverifieerd/werkend.
 - [x] B3 idempotent schrijven + rapportage geïmplementeerd (`--force`, created/unchanged/skipped/overwritten, JSON action).
-- [ ] Volgende: B4 batch-modus; daarna Fase C `emu-launch.sh` adapter.
+- [x] B4 batch-modus geïmplementeerd: `make-marker --batch <dir>` recursief, `--limit`, `--dry-run/--force/--json`, rapport/counts `created/overwritten/unchanged/skipped/ambiguous/errors/proposed`; exit 1 bij ambigu/error.
+- [x] **Fase B afgerond.** Volgende: Fase C `emu-launch.sh` adapter (C1-C6).
 
 ## Fase A — `iso-dispatcher` robuust maken (contract eerst)
 
@@ -87,8 +88,8 @@
 - [x] Test 3: met `--force` → `Overwritten: ...`, inhoud correct vervangen. `--force --dry-run --json` rapporteert `action=overwrite`, `dryRun=true`.
 
 ### B4. Batch-modus voor bibliotheek
-- [ ] Wijziging: marker-maker kan directory-recursief verwerken met `--limit`, `--dry-run`, rapport.
-- [ ] Test: draai op kleine testsubset PSX-mappen — verwacht: rapport created/skipped/ambiguous/errors; geen crash; exit code weerspiegelt fouten.
+- [x] Wijziging: `make-marker --batch <dir>` verwerkt directory-recursief met `--limit`, `--dry-run`, `--force`, `--json`; rapporteert created/overwritten/unchanged/skipped/ambiguous/errors/proposed.
+- [x] Test: kleine temp testsubset PSX-mappen — rapport correct (created 2, ambiguous 1, errors 0), rerun unchanged 2, limit=1 verwerkt 1; geen crash; exit code 1 bij ambigu/error.
 
 ## Fase C — `emu-launch.sh` herschrijven naar iso-dispatcher-adapter
 

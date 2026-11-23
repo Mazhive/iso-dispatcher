@@ -35,6 +35,7 @@ private:
     int cmdLaunch(const QStringList &a);
     int cmdLearn(const QStringList &a);
     int cmdMakeMarker(const QStringList &a);
+    int cmdMakeMarkerBatch(const QString &root, const QString &forcedClass, bool dry, bool json, bool force, int limit);
     int cmdStats();
     int cmdDecisions(const QStringList &a);
     int cmdForget(const QStringList &a);

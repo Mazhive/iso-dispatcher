@@ -4,10 +4,22 @@ All notable changes to `iso-dispatcher` are documented in this file.
 
 ## Versioning & builds
 
-- **Version**: `MAJOR.MINOR.PATCH` (current: `0.0.4`)
+- **Version**: `MAJOR.MINOR.PATCH` (current: `0.0.5`)
 - **Versioned builds**: place built binaries in `build/Build-versions/`
 - **Naming**: `iso-dispatcher-<version>-linux-x86_64` (append `-<shortsha>` or `-<date>` if needed for same-version dev snapshots)
 - **On new change/build**: bump version in source (`src/cli/Cli.cpp` about/version, `src/ui/MainWindow.cpp` About), update this changelog, rebuild, and copy the new binary to `build/Build-versions/` with the new version name. Keep previous versioned binaries for traceability.
+
+## [0.0.5] - 2026-11-23
+
+### Added
+- `make-marker --batch <dir>`: recursive batch marker generation with `--limit`, `--dry-run`, `--force`, `--json`.
+- Batch JSON/text report with counts: `created/overwritten/unchanged/skipped/ambiguous/errors/proposed`.
+
+### Changed
+- Batch mode skips irrelevant directories (no game candidates) and returns exit code 1 when ambiguous/error items are present.
+
+### Verified
+- Temp PSX subset: dry-run reported 3 processed, 2 proposed, 1 ambiguous; real run created 2 + ambiguous 1; rerun unchanged 2 + ambiguous 1; `--limit 1` processed 1; no crash.
 
 ## [0.0.4] - 2026-11-23
 

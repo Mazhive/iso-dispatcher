@@ -2,9 +2,14 @@
 #include "core/MarkerMaker.h"
 #include "core/Util.h"
 
+#include <QDir>
 #include <QDirIterator>
+#include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
+#include <QSet>
 #include <QStandardPaths>
 #include <QTextStream>
 #include <iostream>
@@ -29,7 +34,8 @@ QString Cli::helpText()
         "  iso-dispatcher launch <file.iso> [--class id] [--dry-run]\n"
         "  iso-dispatcher learn <dir> [--dry-run] [--limit N]  Seed knowledge from ISO library\n"
         "  iso-dispatcher make-marker <path> [--class id] [--dry-run] [--force] [--json]\n"
-        "                                          Propose/create boot marker for a dir/file\n"
+        "  iso-dispatcher make-marker --batch <dir> [--class id] [--limit N] [--dry-run] [--force] [--json]\n"
+        "                                          Propose/create boot markers (single or batch)\n"
         "  iso-dispatcher stats                    Knowledge stats\n"
         "  iso-dispatcher decisions [N]            Recent decisions\n"
         "  iso-dispatcher forget <fingerprint>     Forget a learned fingerprint\n"
@@ -78,7 +84,7 @@ int Cli::run(const QStringList &args)
     if (cmd == QStringLiteral("export")) return cmdExport(args.mid(2));
     if (cmd == QStringLiteral("config")) return cmdConfig(args.mid(2));
     if (cmd == QStringLiteral("about") || cmd == QStringLiteral("--about") || cmd == QStringLiteral("--version") || cmd == QStringLiteral("-V")) {
-        out << "iso-dispatcher 0.0.4\n"
+        out << "iso-dispatcher 0.0.5\n"
             << "Content-based ISO classifier/launcher\n\n"
             << "Required emulators/applications:\n"
             << "  - PS1 / PSX  : DuckStation or RetroArch (PSX core)\n"
@@ -296,18 +302,29 @@ int Cli::cmdMakeMarker(const QStringList &a)
     bool dry = false;
     bool json = false;
     bool force = false;
+    bool batch = false;
+    int limit = 0;
     for (int i = 0; i < a.size(); ++i) {
         const QString x = a.at(i);
-        if ((x == QStringLiteral("--class") || x == QStringLiteral("--system")) && i + 1 < a.size()) forcedClass = a.at(++i);
+        if (x == QStringLiteral("--batch")) {
+            batch = true;
+            if (i + 1 < a.size() && !a.at(i + 1).startsWith(QStringLiteral("--")) && input.isEmpty()) {
+                input = a.at(++i);
+            }
+        }
+        else if ((x == QStringLiteral("--class") || x == QStringLiteral("--system")) && i + 1 < a.size()) forcedClass = a.at(++i);
         else if (x == QStringLiteral("--dry-run")) dry = true;
         else if (x == QStringLiteral("--json")) json = true;
         else if (x == QStringLiteral("--force")) force = true;
+        else if (x == QStringLiteral("--limit") && i + 1 < a.size()) limit = a.at(++i).toInt();
         else if (x.startsWith(QStringLiteral("--class="))) forcedClass = x.mid(QStringLiteral("--class=").size());
         else if (x.startsWith(QStringLiteral("--system="))) forcedClass = x.mid(QStringLiteral("--system=").size());
+        else if (x.startsWith(QStringLiteral("--limit="))) limit = x.mid(QStringLiteral("--limit=").size()).toInt();
         else if (input.isEmpty()) input = x;
         else { err << "make-marker: unknown argument: " << x << "\n"; return 2; }
     }
     if (input.isEmpty()) { err << "make-marker: missing <path>\n"; return 2; }
+    if (batch) return cmdMakeMarkerBatch(input, forcedClass, dry, json, force, limit);
 
     MarkerMaker mm(m.cfg, m.probe, m.classifier);
     const MarkerProposal p = mm.propose(input, forcedClass);
@@ -385,6 +402,147 @@ int Cli::cmdMakeMarker(const QStringList &a)
         if (!json) out << "Created: " << p.markerPath << "\n";
     }
     return json ? emitJson(0) : (out << Qt::flush, 0);
+}
+
+int Cli::cmdMakeMarkerBatch(const QString &root, const QString &forcedClass, bool dry, bool json, bool force, int limit)
+{
+    QFileInfo ri(root);
+    if (!ri.exists() || !ri.isDir()) {
+        err << "make-marker --batch: not a directory: " << root << "\n" << Qt::flush;
+        return 2;
+    }
+
+    MarkerMaker mm(m.cfg, m.probe, m.classifier);
+    struct Counts { int created = 0, overwritten = 0, unchanged = 0, skipped = 0, ambiguous = 0, errors = 0, proposed = 0; } counts;
+    QJsonArray items;
+
+    auto handleProposal = [&](const QString &path) {
+        const MarkerProposal p = mm.propose(path, forcedClass);
+        // Skip irrelevant dirs with no candidates - common in recursive scan.
+        if (!p.ok && p.status == QStringLiteral("error") && p.message.contains(QStringLiteral("No entry candidates found"))) {
+            return;
+        }
+
+        QString action = p.status;
+        int itemRc = 0;
+        if (p.ok && p.status == QStringLiteral("exists") && force) action = QStringLiteral("overwrite");
+        if (p.ok && p.status == QStringLiteral("proposed")) action = dry ? QStringLiteral("proposed") : QStringLiteral("create");
+
+        if (!p.ok) {
+            if (p.status == QStringLiteral("ambiguous")) { counts.ambiguous++; itemRc = 2; }
+            else { counts.errors++; itemRc = 2; }
+        } else if (p.status == QStringLiteral("unchanged")) {
+            counts.unchanged++;
+        } else if (p.status == QStringLiteral("exists") && !force) {
+            counts.skipped++; action = QStringLiteral("skipped");
+        } else if (dry) {
+            if (action == QStringLiteral("overwrite")) counts.overwritten++; else counts.proposed++;
+        } else {
+            QFile f(p.markerPath);
+            QIODevice::OpenMode mode = QIODevice::WriteOnly | QIODevice::Text;
+            if (action == QStringLiteral("overwrite")) mode |= QIODevice::Truncate;
+            else mode |= QIODevice::NewOnly;
+            if (!f.open(mode)) {
+                counts.errors++; itemRc = 1; action = QStringLiteral("error");
+            } else {
+                f.write(p.markerContent.toUtf8());
+                f.close();
+                if (action == QStringLiteral("overwrite")) counts.overwritten++;
+                else counts.created++;
+            }
+        }
+
+        QJsonObject o = p.toJson();
+        o.insert(QStringLiteral("path"), path);
+        o.insert(QStringLiteral("action"), action);
+        o.insert(QStringLiteral("dryRun"), dry);
+        o.insert(QStringLiteral("force"), force);
+        if (itemRc != 0) o.insert(QStringLiteral("exitCode"), itemRc);
+        items.append(o);
+
+        if (!json) {
+            out << "[" << action << "] " << path;
+            if (!p.classId.isEmpty()) out << " class=" << p.classId;
+            if (!p.entry.isEmpty()) out << " entry=" << p.entry;
+            if (!p.message.isEmpty() && action != QStringLiteral("proposed") && action != QStringLiteral("create") && action != QStringLiteral("overwrite") && action != QStringLiteral("unchanged")) out << " :: " << p.message;
+            out << "\n";
+        }
+    };
+
+    // Include root, then recurse. Deduplicate by canonical path.
+    QSet<QString> seen;
+    QStringList dirs;
+    dirs << ri.absoluteFilePath();
+    QDirIterator it(ri.absoluteFilePath(), QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+    while (it.hasNext()) dirs << it.next();
+
+    int processed = 0;
+    for (const QString &d : dirs) {
+        const QString canon = QFileInfo(d).canonicalFilePath();
+        if (canon.isEmpty() || seen.contains(canon)) continue;
+        seen.insert(canon);
+        // Skip marker files themselves; propose expects dir/file input but dirs are our targets.
+        if (d.endsWith(QStringLiteral(".ps1boot.iso"), Qt::CaseInsensitive) ||
+            d.endsWith(QStringLiteral(".ps2boot.iso"), Qt::CaseInsensitive) ||
+            d.endsWith(QStringLiteral(".ps3boot.iso"), Qt::CaseInsensitive) ||
+            d.endsWith(QStringLiteral(".pspboot.iso"), Qt::CaseInsensitive))
+            continue;
+        // Quick prefilter: has relevant content? avoid calling propose on every random dir.
+        bool relevant = false;
+        {
+            QDir qd(d);
+            const QFileInfoList entries = qd.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+            for (const QFileInfo &e : entries) {
+                const QString n = e.fileName();
+                if (e.isDir()) {
+                    if (n.compare(QStringLiteral("PS3_GAME"), Qt::CaseInsensitive) == 0) { relevant = true; break; }
+                    continue;
+                }
+                const QString suf = e.suffix().toLower();
+                if (suf == QStringLiteral("cue") || suf == QStringLiteral("iso") || suf == QStringLiteral("chd") || suf == QStringLiteral("cso") || suf == QStringLiteral("pbp") || suf == QStringLiteral("bin") || suf == QStringLiteral("img") || suf == QStringLiteral("mdf")) { relevant = true; break; }
+                if (n.compare(QStringLiteral("EBOOT.BIN"), Qt::CaseInsensitive) == 0) { relevant = true; break; }
+                if (n.endsWith(QStringLiteral("boot.iso"), Qt::CaseInsensitive)) { relevant = true; break; }
+            }
+        }
+        if (!relevant) continue;
+
+        handleProposal(d);
+        ++processed;
+        if (limit > 0 && processed >= limit) break;
+    }
+
+    const int totalIssues = counts.ambiguous + counts.errors;
+    if (json) {
+        QJsonObject root;
+        root.insert(QStringLiteral("root"), ri.absoluteFilePath());
+        root.insert(QStringLiteral("dryRun"), dry);
+        root.insert(QStringLiteral("force"), force);
+        root.insert(QStringLiteral("limit"), limit);
+        QJsonObject c;
+        c.insert(QStringLiteral("created"), counts.created);
+        c.insert(QStringLiteral("overwritten"), counts.overwritten);
+        c.insert(QStringLiteral("unchanged"), counts.unchanged);
+        c.insert(QStringLiteral("skipped"), counts.skipped);
+        c.insert(QStringLiteral("ambiguous"), counts.ambiguous);
+        c.insert(QStringLiteral("errors"), counts.errors);
+        c.insert(QStringLiteral("proposed"), counts.proposed);
+        c.insert(QStringLiteral("processed"), processed);
+        root.insert(QStringLiteral("counts"), c);
+        root.insert(QStringLiteral("items"), items);
+        out << QJsonDocument(root).toJson(QJsonDocument::Indented) << Qt::flush;
+    } else {
+        out << "---\n";
+        out << "Processed: " << processed
+            << " created=" << counts.created
+            << " overwritten=" << counts.overwritten
+            << " unchanged=" << counts.unchanged
+            << " skipped=" << counts.skipped
+            << " ambiguous=" << counts.ambiguous
+            << " errors=" << counts.errors
+            << " proposed=" << counts.proposed
+            << " dryRun=" << (dry ? "yes" : "no") << "\n" << Qt::flush;
+    }
+    return totalIssues > 0 ? 1 : 0;
 }
 
 int Cli::cmdStats()

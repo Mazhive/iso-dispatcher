@@ -434,11 +434,14 @@ iso-dispatcher includes a `make-marker` CLI command to propose/create boot marke
 
 ```bash
 iso-dispatcher make-marker <path> [--class id|--system id] [--dry-run] [--force] [--json]
+iso-dispatcher make-marker --batch <dir> [--class id|--system id] [--limit N] [--dry-run] [--force] [--json]
 ```
 
 - `<path>` can be a game directory or a specific entry file.
 - `--dry-run` shows the proposed marker without writing.
-- `--json` outputs machine-readable results.
+- `--force` overwrites an existing different marker (correct markers stay unchanged).
+- `--json` outputs machine-readable results, including `action`, `dryRun`, `force`.
+- Batch mode recursively scans directories, skips irrelevant dirs, and reports `created/overwritten/unchanged/skipped/ambiguous/errors/proposed`; exit code is non-zero when batch has ambiguous/error items.
 - Deterministic entry selection: PS1/PS2 prefer `.cue`, then `.chd/.iso/.bin`; PS3 JB prefers `PS3_GAME/USRDIR/EBOOT.BIN`/`EBOOT.BIN`; PSP prefers `.iso/.cso/.pbp` or `EBOOT.PBP`.
 - Ambiguous candidates are reported as an error/list (no write).
 
@@ -921,12 +924,15 @@ De applicatie controleert:
 iso-dispatcher bevat een `make-marker` CLI-commando om boot-markers voor te stellen/aan te maken:
 
 ```bash
-iso-dispatcher make-marker <pad> [--class id|--system id] [--dry-run] [--json]
+iso-dispatcher make-marker <pad> [--class id|--system id] [--dry-run] [--force] [--json]
+iso-dispatcher make-marker --batch <map> [--class id|--system id] [--limit N] [--dry-run] [--force] [--json]
 ```
 
 - `<pad>` kan een gamemap of een specifiek entry-bestand zijn.
 - `--dry-run` toont de voorgestelde marker zonder te schrijven.
-- `--json` geeft machine-leesbare output.
+- `--force` overschrijft een bestaande afwijkende marker (correcte markers blijven `unchanged`).
+- `--json` geeft machine-leesbare output, inclusief `action`, `dryRun`, `force`.
+- Batch-modus scant recursief mappen, slaat irrelevante mappen over en rapporteert `created/overwritten/unchanged/skipped/ambiguous/errors/proposed`; exit code is niet-0 bij ambigu/error-items.
 - Deterministische entry-selectie: PS1/PS2 voorkeur `.cue`, daarna `.chd/.iso/.bin`; PS3 JB voorkeur `PS3_GAME/USRDIR/EBOOT.BIN`/`EBOOT.BIN`; PSP voorkeur `.iso/.cso/.pbp` of `EBOOT.PBP`.
 - Meerdere gelijkwaardige kandidaten geven een ambigu-fout/lijst (geen write).
 
