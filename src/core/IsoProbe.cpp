@@ -103,18 +103,18 @@ void IsoProbe::readTree(ProbeResult &r) const
     // not the file's path/folder on disk.
     const QString isoInfo = QStandardPaths::findExecutable(QStringLiteral("isoinfo"));
     if (isoInfo.isEmpty()) {
-        r.warnings << QStringLiteral("isoinfo niet gevonden; tree/root-metadata scan is beperkt. Installeer voor completere detectie: sudo apt install genisoimage (of wodim/cdrkit afhankelijk van distro).");
+        r.warnings << QStringLiteral("isoinfo not found; tree/root-metadata scan is limited. For better detection install: sudo apt install genisoimage (or wodim/cdrkit depending on distro).");
         return;
     }
     QProcess p;
     p.start(isoInfo, {QStringLiteral("-f"), QStringLiteral("-i"), r.path});
     if (!p.waitForFinished(5000)) {
         p.kill();
-        r.warnings << QStringLiteral("isoinfo timeout/fout; tree-metadata scan overgeslagen.");
+        r.warnings << QStringLiteral("isoinfo timeout/error; tree-metadata scan skipped.");
         return;
     }
     if (p.exitStatus() != QProcess::NormalExit || p.exitCode() != 0) {
-        r.warnings << QStringLiteral("isoinfo gaf een fout terug; tree-metadata scan mogelijk onvolledig.");
+        r.warnings << QStringLiteral("isoinfo returned an error; tree-metadata scan may be incomplete.");
         // Continue parsing any partial output.
     }
     const QByteArray out = p.readAllStandardOutput();
@@ -180,6 +180,58 @@ void IsoProbe::scanUdfHint(ProbeResult &r) const
     if (r.magicDesc.contains(QStringLiteral("ISO 9660"), Qt::CaseInsensitive)) r.iso9660 = true;
 }
 
+static bool isSafeRelativeEntry(const QString &entry)
+{
+    if (entry.isEmpty()) return false;
+    QFileInfo ei(entry);
+    if (ei.isAbsolute()) return false;
+    if (entry.contains(QLatin1Char('\\'))) {
+        // Allow backslashes in value parsing, but normalize later; reject obvious traversal forms.
+    }
+    const QString normalized = QDir::cleanPath(entry);
+    if (normalized.startsWith(QStringLiteral("../")) || normalized == QStringLiteral("..") || normalized.contains(QStringLiteral("/../")))
+        return false;
+    if (normalized.startsWith(QLatin1Char('/')))
+        return false;
+    return true;
+}
+
+static QString validateCueReferences(const QString &cuePath, QString *detail)
+{
+    QFile cf(cuePath);
+    if (!cf.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        if (detail) *detail = QStringLiteral("cue not readable: %1").arg(cuePath);
+        return QStringLiteral("cue-read");
+    }
+    const QString txt = QString::fromUtf8(cf.readAll());
+    const QRegularExpression re(QStringLiteral("^\\s*FILE\\s+(.*)\\s+(BINARY|MOTOROLA|AIFF|WAVE|MP3)\\s*$"),
+                                 QRegularExpression::CaseInsensitiveOption | QRegularExpression::MultilineOption);
+    const QDir base = QFileInfo(cuePath).absoluteDir();
+    bool sawFile = false;
+    auto it = re.globalMatch(txt);
+    while (it.hasNext()) {
+        sawFile = true;
+        const QRegularExpressionMatch m = it.next();
+        QString ref = m.captured(1).trimmed();
+        if ((ref.startsWith(QLatin1Char('"')) && ref.endsWith(QLatin1Char('"'))) ||
+            (ref.startsWith(QLatin1Char('\'')) && ref.endsWith(QLatin1Char('\'')))) {
+            ref = ref.mid(1, ref.size() - 2);
+        }
+        if (ref.isEmpty()) {
+            if (detail) *detail = QStringLiteral("cue contains empty FILE reference: %1").arg(cuePath);
+            return QStringLiteral("cue-ref");
+        }
+        const QFileInfo ri(ref);
+        const QString resolved = ri.isAbsolute() ? ri.absoluteFilePath() : base.absoluteFilePath(ref);
+        if (!QFileInfo::exists(resolved)) {
+            if (detail) *detail = QStringLiteral("cue references missing file '%1' in %2").arg(ref, cuePath);
+            return QStringLiteral("cue-missing");
+        }
+    }
+    Q_UNUSED(sawFile);
+    return {};
+}
+
 ProbeResult IsoProbe::probe(const QString &isoPath) const
 {
     ProbeResult r;
@@ -209,43 +261,74 @@ ProbeResult IsoProbe::probe(const QString &isoPath) const
                 else if (k == QStringLiteral("entry") || k == QStringLiteral("path")) entry = v;
             }
             const QDir baseDir = fi.absoluteDir();
-            if (!entry.isEmpty()) {
-                QFileInfo ei(entry);
-                r.bootEntry = ei.isAbsolute() ? ei.absoluteFilePath() : baseDir.absoluteFilePath(entry);
-            } else if (r.bootClass.compare(QStringLiteral("ps3"), Qt::CaseInsensitive) == 0) {
-                const QString autoEboot = baseDir.absoluteFilePath(QStringLiteral("PS3_GAME/USRDIR/EBOOT.BIN"));
-                if (QFileInfo::exists(autoEboot)) r.bootEntry = autoEboot;
-            } else if (r.bootClass.compare(QStringLiteral("ps2"), Qt::CaseInsensitive) == 0) {
-                // PS2 extracted layout: SYSTEM.CNF contains BOOT2 = cdrom0:\SLUS_123.45;1
-                const QString cnfPath = baseDir.absoluteFilePath(QStringLiteral("SYSTEM.CNF"));
-                QFile cnf(cnfPath);
-                if (cnf.open(QIODevice::ReadOnly | QIODevice::Text)) {
-                    const QString cnfText = QString::fromLatin1(cnf.readAll());
-                    const QRegularExpression re(QStringLiteral("BOOT2\\s*=\\s*cdrom0:\\\\?([^;\\r\\n]+)"), QRegularExpression::CaseInsensitiveOption);
-                    const QRegularExpressionMatch m = re.match(cnfText);
-                    if (m.hasMatch()) {
-                        QString boot = m.captured(1).trimmed();
-                        boot.replace(QLatin1Char('\\'), QLatin1Char('/'));
-                        // PS2 discs usually have the ELF at root; try as-is and uppercase variants.
-                        const QString cand = baseDir.absoluteFilePath(boot);
-                        if (QFileInfo::exists(cand)) r.bootEntry = QFileInfo(cand).absoluteFilePath();
-                        else {
-                            const QString up = baseDir.absoluteFilePath(boot.toUpper());
-                            if (QFileInfo::exists(up)) r.bootEntry = QFileInfo(up).absoluteFilePath();
+            const QString normalizedClass = r.bootClass.trimmed();
+            if (normalizedClass.isEmpty()) {
+                r.error = QStringLiteral("Invalid marker: missing 'class' field in %1").arg(r.path);
+                r.errorCode = 2;
+            } else if (entry.isEmpty()) {
+                // Backward-compatible auto-resolve for known layouts.
+                if (r.bootClass.compare(QStringLiteral("ps3"), Qt::CaseInsensitive) == 0) {
+                    const QString autoEboot = baseDir.absoluteFilePath(QStringLiteral("PS3_GAME/USRDIR/EBOOT.BIN"));
+                    if (QFileInfo::exists(autoEboot)) r.bootEntry = autoEboot;
+                } else if (r.bootClass.compare(QStringLiteral("ps2"), Qt::CaseInsensitive) == 0) {
+                    const QString cnfPath = baseDir.absoluteFilePath(QStringLiteral("SYSTEM.CNF"));
+                    QFile cnf(cnfPath);
+                    if (cnf.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                        const QString cnfText = QString::fromLatin1(cnf.readAll());
+                        const QRegularExpression re(QStringLiteral("BOOT2\\s*=\\s*cdrom0:\\\\?([^;\\r\\n]+)"), QRegularExpression::CaseInsensitiveOption);
+                        const QRegularExpressionMatch m = re.match(cnfText);
+                        if (m.hasMatch()) {
+                            QString boot = m.captured(1).trimmed();
+                            boot.replace(QLatin1Char('\\'), QLatin1Char('/'));
+                            const QString cand = baseDir.absoluteFilePath(boot);
+                            if (QFileInfo::exists(cand)) r.bootEntry = QFileInfo(cand).absoluteFilePath();
+                            else {
+                                const QString up = baseDir.absoluteFilePath(boot.toUpper());
+                                if (QFileInfo::exists(up)) r.bootEntry = QFileInfo(up).absoluteFilePath();
+                            }
+                        }
+                    }
+                } else if (r.bootClass.compare(QStringLiteral("ps4"), Qt::CaseInsensitive) == 0) {
+                    const QString autoEboot = baseDir.absoluteFilePath(QStringLiteral("eboot.bin"));
+                    if (QFileInfo::exists(autoEboot)) r.bootEntry = autoEboot;
+                    else {
+                        const QString upper = baseDir.absoluteFilePath(QStringLiteral("EBOOT.BIN"));
+                        if (QFileInfo::exists(upper)) r.bootEntry = upper;
+                    }
+                }
+                if (r.bootEntry.isEmpty()) {
+                    r.error = QStringLiteral("Invalid marker: missing 'entry' field and no auto-resolve possible in %1").arg(r.path);
+                    r.errorCode = 2;
+                }
+            } else if (!isSafeRelativeEntry(entry)) {
+                r.error = QStringLiteral("Invalid/unsafe entry path '%1' in marker %2").arg(entry, r.path);
+                r.errorCode = 2;
+            } else {
+                const QString cleaned = QDir::cleanPath(entry);
+                const QString resolved = baseDir.absoluteFilePath(cleaned);
+                QFileInfo rei(resolved);
+                if (!rei.exists()) {
+                    r.error = QStringLiteral("Reference not found: entry '%1' does not exist (marker: %2)").arg(entry, r.path);
+                    r.errorCode = 3;
+                } else if (!rei.isReadable()) {
+                    r.error = QStringLiteral("Reference not readable: entry '%1' (marker: %2)").arg(entry, r.path);
+                    r.errorCode = 3;
+                } else {
+                    r.bootEntry = rei.absoluteFilePath();
+                    if (rei.suffix().compare(QStringLiteral("cue"), Qt::CaseInsensitive) == 0) {
+                        QString cueDetail;
+                        const QString cueErr = validateCueReferences(r.bootEntry, &cueDetail);
+                        if (!cueErr.isEmpty()) {
+                            r.error = QStringLiteral("Invalid reference: %1").arg(cueDetail);
+                            r.errorCode = 3;
                         }
                     }
                 }
-            } else if (r.bootClass.compare(QStringLiteral("ps4"), Qt::CaseInsensitive) == 0) {
-                const QString autoEboot = baseDir.absoluteFilePath(QStringLiteral("eboot.bin"));
-                if (QFileInfo::exists(autoEboot)) r.bootEntry = autoEboot;
-                else {
-                    const QString upper = baseDir.absoluteFilePath(QStringLiteral("EBOOT.BIN"));
-                    if (QFileInfo::exists(upper)) r.bootEntry = upper;
-                }
             }
+
             if (!r.bootClass.isEmpty()) r.features.append({QStringLiteral("boot.class"), r.bootClass.toUpper(), QStringLiteral("marker")});
             if (!r.bootEntry.isEmpty()) r.features.append({QStringLiteral("boot.entry"), r.bootEntry, QStringLiteral("marker")});
-            else r.warnings << QStringLiteral("Boot-marker gevonden maar geen geldige entry/EBOOT.BIN.");
+            else if (r.error.isEmpty()) r.warnings << QStringLiteral("Boot marker found but no valid entry/EBOOT.BIN.");
 
             QCryptographicHash h(QCryptographicHash::Sha1);
             h.addData("boot-marker\n");

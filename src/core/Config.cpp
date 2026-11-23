@@ -13,6 +13,7 @@ namespace iso {
 
 static const char *kDefaultConfig = R"JSON({
   "version": 1,
+  "language": "en",
   "comment": "iso-dispatcher: pure content classification. NO path/folder rules by design.",
   "scan": {
     "fast_bytes": 65536,
@@ -204,6 +205,12 @@ int Config::rootDirBytes() const { return get(QStringLiteral("scan/root_dir_byte
 int Config::maxDirs() const { return get(QStringLiteral("scan/max_dirs"), 64).toInt(); }
 bool Config::useFileProbe() const { return get(QStringLiteral("scan/use_file_probe"), true).toBool(); }
 
+QString Config::language() const
+{
+    const QString v = get(QStringLiteral("language"), QStringLiteral("en")).toString().trimmed().toLower();
+    return (v == QStringLiteral("nl")) ? QStringLiteral("nl") : QStringLiteral("en");
+}
+
 bool Config::askEnabled() const { return get(QStringLiteral("ask/enabled"), true).toBool(); }
 double Config::askMinScore() const { return get(QStringLiteral("ask/min_score"), 70).toDouble(); }
 double Config::tieMargin() const { return get(QStringLiteral("ask/tie_margin"), 10).toDouble(); }
@@ -262,10 +269,25 @@ QList<ClassDef> Config::classes() const
     return out;
 }
 
+QString Config::normalizeClassId(const QString &id)
+{
+    const QString n = id.trimmed().toLower();
+    if (n == QStringLiteral("psx")) return QStringLiteral("ps1");
+    return n;
+}
+
 QString Config::labelFor(const QString &id) const
 {
-    for (const auto &c : classes()) if (c.id == id) return c.label;
+    const QString nid = normalizeClassId(id);
+    for (const auto &c : classes()) if (c.id == nid) return c.label;
     return id;
+}
+
+bool Config::hasClass(const QString &id) const
+{
+    const QString nid = normalizeClassId(id);
+    for (const auto &c : classes()) if (c.id == nid) return true;
+    return false;
 }
 
 } // namespace iso

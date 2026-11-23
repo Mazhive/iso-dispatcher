@@ -87,13 +87,15 @@ Decision Classifier::classify(const ProbeResult &probe) const
 
     // Explicit boot-marker shortcut wins.
     if (probe.bootMarker && !probe.bootClass.isEmpty()) {
+        const QString cls = Config::normalizeClassId(probe.bootClass);
         ScoreBreak b;
-        b.classId = probe.bootClass;
+        b.classId = cls;
         b.base = 1000;
         b.total = 1000;
         b.reasons << QStringLiteral("[boot-marker]");
+        if (probe.bootClass.trimmed().toLower() != cls) b.reasons << QStringLiteral("alias=%1->%2").arg(probe.bootClass, cls);
         if (!probe.bootEntry.isEmpty()) b.reasons << QStringLiteral("entry=%1").arg(probe.bootEntry);
-        d.classId = probe.bootClass;
+        d.classId = cls;
         d.score = 1000;
         d.confidence = 1.0;
         d.ask = false;
@@ -113,6 +115,7 @@ Decision Classifier::classify(const ProbeResult &probe) const
     for (const auto &cls : classes) {
         ScoreBreak b;
         b.classId = cls.id;
+        b.priority = cls.priority;
         b.base = applyRules(cls, probe, b.reasons);
         if (m_cfg.learnEnabled()) {
             b.learned = m_kb.scoreContribution(probe, cls.id);
@@ -127,7 +130,8 @@ Decision Classifier::classify(const ProbeResult &probe) const
 
     std::sort(breaks.begin(), breaks.end(), [](const ScoreBreak &a, const ScoreBreak &b) {
         if (a.total != b.total) return a.total > b.total;
-        return a.base > b.base;
+        if (a.base != b.base) return a.base > b.base;
+        return a.priority > b.priority;
     });
 
     d.all = breaks;
@@ -157,8 +161,8 @@ QStringList Classifier::explain(const ProbeResult &probe, const Decision &d) con
     out << QStringLiteral("decision: %1 score=%2 conf=%3 ask=%4")
                .arg(d.classId).arg(d.score, 0, 'f', 1).arg(d.confidence, 0, 'f', 3).arg(d.ask ? "yes" : "no");
     for (const auto &b : d.all.mid(0, 5)) {
-        out << QStringLiteral("  - %1: base=%2 db=%3 total=%4")
-                   .arg(b.classId).arg(b.base, 0, 'f', 1).arg(b.learned, 0, 'f', 2).arg(b.total, 0, 'f', 1);
+        out << QStringLiteral("  - %1: base=%2 db=%3 total=%4 prio=%5")
+                   .arg(b.classId).arg(b.base, 0, 'f', 1).arg(b.learned, 0, 'f', 2).arg(b.total, 0, 'f', 1).arg(b.priority);
         for (const auto &r : b.reasons.mid(0, 6)) out << QStringLiteral("      %1").arg(r);
     }
     return out;

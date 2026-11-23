@@ -41,8 +41,9 @@ Launcher::Result Launcher::launchCommand(const QString &exec, const QStringList 
 
 Launcher::Result Launcher::launchClass(const QString &classId, const QString &isoPath, const QString &entry) const
 {
+    const QString nid = Config::normalizeClassId(classId);
     for (const auto &c : m_cfg.classes()) {
-        if (c.id == classId) return launchCommand(c.exec, c.args, isoPath, entry);
+        if (c.id == nid) return launchCommand(c.exec, c.args, isoPath, entry);
     }
     Result r; r.message = QStringLiteral("unknown class: ") + classId; return r;
 }

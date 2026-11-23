@@ -12,6 +12,8 @@
 #include <QTableWidget>
 #include <QPushButton>
 #include <QLabel>
+#include <QAction>
+#include <QMenu>
 
 namespace iso {
 
@@ -29,9 +31,12 @@ private slots:
     void onRemember();
     void onEditConfig();
     void onAbout();
+    void onLanguageChanged(QAction *action);
 
 private:
     void setDecision(const ProbeResult &pr, const Decision &d);
+    void retranslateUi();
+    QString trUi(const QString &en, const QString &nl) const;
 
     Config &m_cfg;
     Knowledge &m_kb;
@@ -44,8 +49,21 @@ private:
     QTextEdit *m_evidence = nullptr;
     QTableWidget *m_scores = nullptr;
     QLabel *m_status = nullptr;
+    QLabel *m_evidenceLabel = nullptr;
+    QLabel *m_scoresLabel = nullptr;
     QPushButton *m_launchBtn = nullptr;
     QPushButton *m_rememberBtn = nullptr;
+    QPushButton *m_scanBtn = nullptr;
+
+    QMenu *m_fileMenu = nullptr;
+    QMenu *m_helpMenu = nullptr;
+    QMenu *m_langMenu = nullptr;
+    QAction *m_openAct = nullptr;
+    QAction *m_cfgAct = nullptr;
+    QAction *m_quitAct = nullptr;
+    QAction *m_aboutAct = nullptr;
+    QAction *m_langEnAct = nullptr;
+    QAction *m_langNlAct = nullptr;
 
     ProbeResult m_lastProbe;
     Decision m_lastDecision;

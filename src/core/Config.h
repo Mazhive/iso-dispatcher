@@ -29,6 +29,9 @@ public:
     int maxDirs() const;
     bool useFileProbe() const;
 
+    // ui
+    QString language() const; // "en" (default) or "nl"
+
     // ask
     bool askEnabled() const;
     double askMinScore() const;
@@ -54,6 +57,8 @@ public:
     QStringList fallbackElse() const;
     QList<ClassDef> classes() const;
     QString labelFor(const QString &id) const;
+    static QString normalizeClassId(const QString &id);
+    bool hasClass(const QString &id) const;
 
 private:
     QJsonObject m_root;

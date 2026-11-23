@@ -83,7 +83,26 @@ iso-dispatcher config path|init|get|set
 iso-dispatcher --help | -h | ?
 ```
 
-Exit codes: `0=ok`, `2=bad args`, `3=headless ambiguous abort`, `4=cancelled`, `5=launch failed`.
+Exit codes: `0=ok`, `1=general/usage error`, `2=marker invalid`, `3=entry/reference missing or invalid`, `4=class unknown/not configured`, `5=emulator/exec missing or launch failed`.
+
+## Boot markers
+
+`iso-dispatcher` supports portable boot markers (text files starting with `ISO-DISPATCHER-BOOT`).
+
+Format:
+
+```text
+ISO-DISPATCHER-BOOT
+class=ps1
+entry=Game.cue
+```
+
+Validation before launch/classify decision:
+- required `class` and `entry` (or known auto-resolve for PS2/PS3/PS4 layouts)
+- `entry` must be relative/safe (no absolute path, no `..` traversal)
+- entry must exist and be readable
+- for `.cue` entries, referenced `FILE` targets are validated
+- class alias: `psx -> ps1`
 
 ## GUI
 

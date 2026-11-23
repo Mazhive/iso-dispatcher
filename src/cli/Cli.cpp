@@ -4,6 +4,7 @@
 #include <QDirIterator>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QStandardPaths>
 #include <QTextStream>
 #include <iostream>
 
@@ -36,6 +37,18 @@ QString Cli::helpText()
         "  iso-dispatcher config set <key> <val>   Set config value\n"
         "  iso-dispatcher about                    Show about / required emulators\n"
         "  iso-dispatcher --help | -h | ?          This help\n\n"
+        "Boot markers:\n"
+        "  - Text file starting with ISO-DISPATCHER-BOOT.\n"
+        "  - Required fields: class=<id> and entry=<relative path> (or auto-resolve for known layouts).\n"
+        "  - Entry must be relative/safe; cue FILE references are validated before launch.\n"
+        "  - Class alias: psx -> ps1.\n\n"
+        "Exit codes (CLI):\n"
+        "  0 success / dry-run OK\n"
+        "  1 general/usage error\n"
+        "  2 marker invalid\n"
+        "  3 entry/reference missing or invalid\n"
+        "  4 class unknown/not configured\n"
+        "  5 emulator/exec missing or launch failed\n\n"
         "Notes:\n"
         "  - Classification is CONTENT-ONLY. No folder/path rules are used.\n"
         "  - Config: $HOME/.config/iso-dispatcher.json\n"
@@ -89,9 +102,9 @@ int Cli::run(const QStringList &args)
 
 int Cli::cmdClassify(const QStringList &a)
 {
-    if (a.isEmpty()) { err << "classify: missing <file.iso>\n"; return 2; }
+    if (a.isEmpty()) { err << "classify: missing <file.iso>\n"; return 1; }
     const ProbeResult pr = m.probe.probe(a.first());
-    if (!pr.error.isEmpty()) { err << pr.error << "\n"; return 1; }
+    if (!pr.error.isEmpty()) { err << pr.error << "\n"; return pr.errorCode ? pr.errorCode : 1; }
     const Decision d = m.classifier.classify(pr);
     QJsonObject o;
     o.insert(QStringLiteral("file"), pr.path);
@@ -101,6 +114,8 @@ int Cli::cmdClassify(const QStringList &a)
     o.insert(QStringLiteral("score"), d.score);
     o.insert(QStringLiteral("confidence"), d.confidence);
     o.insert(QStringLiteral("ask"), d.ask);
+    o.insert(QStringLiteral("bootMarker"), pr.bootMarker);
+    if (pr.bootMarker) o.insert(QStringLiteral("bootEntry"), pr.bootEntry);
     QJsonArray feats; for (const auto &f : pr.features) feats.append(f.text()); o.insert(QStringLiteral("features"), feats);
     if (!pr.warnings.isEmpty()) { QJsonArray w; for (const auto &x : pr.warnings) w.append(x); o.insert(QStringLiteral("warnings"), w); }
     out << QJsonDocument(o).toJson(QJsonDocument::Indented) << Qt::flush;
@@ -109,9 +124,9 @@ int Cli::cmdClassify(const QStringList &a)
 
 int Cli::cmdWhy(const QStringList &a)
 {
-    if (a.isEmpty()) { err << "why: missing <file.iso>\n"; return 2; }
+    if (a.isEmpty()) { err << "why: missing <file.iso>\n"; return 1; }
     const ProbeResult pr = m.probe.probe(a.first());
-    if (!pr.error.isEmpty()) { err << pr.error << "\n"; return 1; }
+    if (!pr.error.isEmpty()) { err << pr.error << "\n"; return pr.errorCode ? pr.errorCode : 1; }
     const Decision d = m.classifier.classify(pr);
     for (const QString &line : m.classifier.explain(pr, d)) out << line << "\n";
     for (const QString &w : pr.warnings) err << "WARNING: " << w << "\n";
@@ -122,7 +137,7 @@ int Cli::cmdWhy(const QStringList &a)
 
 int Cli::cmdLaunch(const QStringList &a)
 {
-    if (a.isEmpty()) { err << "launch: missing <file.iso>\n"; return 2; }
+    if (a.isEmpty()) { err << "launch: missing <file.iso>\n"; return 1; }
     QString iso; QString forceClass; bool dry = false;
     for (int i = 0; i < a.size(); ++i) {
         const QString x = a.at(i);
@@ -131,14 +146,22 @@ int Cli::cmdLaunch(const QStringList &a)
         else if (iso.isEmpty()) iso = x;
     }
     const ProbeResult pr = m.probe.probe(iso);
-    if (!pr.error.isEmpty()) { err << pr.error << "\n"; return 1; }
+    if (!pr.error.isEmpty()) { err << pr.error << "\n"; return pr.errorCode ? pr.errorCode : 1; }
+
     Decision d = m.classifier.classify(pr);
-    QString chosen = forceClass.isEmpty() ? d.classId : forceClass;
-    bool overridden = !forceClass.isEmpty() && forceClass != d.classId;
+    QString chosen = forceClass.isEmpty() ? d.classId : Config::normalizeClassId(forceClass);
+    bool overridden = !forceClass.isEmpty() && chosen != d.classId;
+
+    if (!forceClass.isEmpty() && !m.cfg.hasClass(chosen)) {
+        err << "Unknown class: '" << forceClass << "' (normalized: '" << chosen << "')\n";
+        err << "Known classes:";
+        for (const auto &c : m.cfg.classes()) err << " " << c.id;
+        err << "\n" << Qt::flush;
+        return 4;
+    }
 
     if (forceClass.isEmpty() && d.ask) {
-        if (m.cfg.headless() == QStringLiteral("abort")) { err << "ambiguous; ask disabled in headless mode\n"; return 3; }
-        // Simple terminal menu.
+        if (m.cfg.headless() == QStringLiteral("abort")) { err << "ambiguous; ask disabled in headless mode\n"; return 1; }
         out << "Uncertain classification for: " << pr.path << "\n";
         out << "Best guess: " << d.classId << " score=" << d.score << " conf=" << d.confidence << "\n";
         if (m.cfg.showEvidence()) {
@@ -150,46 +173,84 @@ int Cli::cmdLaunch(const QStringList &a)
         std::string line; std::getline(std::cin, line);
         QString sel = QString::fromLocal8Bit(line.c_str()).trimmed();
         if (sel.compare(QStringLiteral("q"), Qt::CaseInsensitive) == 0) {
-            m.kb.negativeCache(pr.fingerprint); m.kb.save(); return 4;
+            m.kb.negativeCache(pr.fingerprint); m.kb.save(); return 1;
         }
         if (!sel.isEmpty()) {
             bool ok = false; int idx = sel.toInt(&ok);
             if (ok && idx >= 1 && idx <= classes.size()) { chosen = classes[idx - 1].id; overridden = chosen != d.classId; }
-            else { chosen = sel; overridden = chosen != d.classId; }
+            else { chosen = Config::normalizeClassId(sel); overridden = chosen != d.classId; }
+            if (!m.cfg.hasClass(chosen)) {
+                err << "Unknown class: '" << sel << "'\n" << Qt::flush;
+                return 4;
+            }
         }
         m.kb.rememberFingerprint(pr.fingerprint, chosen);
     }
 
-    if (chosen.isEmpty()) chosen = m.cfg.fallbackElse().value(0);
+    if (chosen.isEmpty()) {
+        const auto fb = m.cfg.fallbackElse();
+        if (!fb.isEmpty()) chosen = QStringLiteral("__fallback__");
+    }
+    if (chosen.isEmpty()) { err << "No class selected and no fallback configured\n"; return 4; }
+
+    if (chosen != QStringLiteral("__fallback__") && !m.cfg.hasClass(chosen)) {
+        err << "Unknown/unconfigured class: '" << chosen << "'\n";
+        return 4;
+    }
+
     out << "Chosen class: " << chosen << "\n";
+    if (pr.bootMarker) {
+        out << "Boot marker: " << pr.path << "\n";
+        out << "Resolved entry: " << pr.bootEntry << "\n";
+    }
+    auto execMissing = [](const QString &exec) {
+        const QString e = exec.trimmed();
+        if (e.isEmpty()) return true;
+        QFileInfo fi(e);
+        if (fi.isAbsolute() || e.contains(QLatin1Char('/'))) return !fi.exists();
+        return QStandardPaths::findExecutable(e).isEmpty();
+    };
+
     if (dry) {
-        // Resolve command for display
         bool found = false;
         for (const auto &c : m.cfg.classes()) {
-            if (c.id == chosen) {
+            if (c.id == Config::normalizeClassId(chosen)) {
                 out << "Exec: " << c.exec << "\n";
                 out << "Args: " << Launcher::substitute(c.args, pr.launchPath(), QString()).join(QLatin1Char(' ')) << "\n";
+                if (execMissing(c.exec)) { err << "Emulator/exec missing for class " << c.id << ": " << c.exec << "\n" << Qt::flush; return 5; }
                 found = true; break;
             }
         }
         if (!found) {
             const auto fb = m.cfg.fallbackElse();
-            if (!fb.isEmpty()) out << "Exec: " << fb.first() << "\nArgs: " << Launcher::substitute(fb.mid(1), pr.launchPath(), QString()).join(QLatin1Char(' ')) << "\n";
+            if (!fb.isEmpty()) {
+                out << "Exec: " << fb.first() << "\nArgs: " << Launcher::substitute(fb.mid(1), pr.launchPath(), QString()).join(QLatin1Char(' ')) << "\n";
+                if (execMissing(fb.first())) { err << "Fallback exec missing: " << fb.first() << "\n" << Qt::flush; return 5; }
+            } else { err << "No exec/fallback found for class " << chosen << "\n"; return 4; }
         }
-        out << "(dry-run) not launching\n";
+        out << "(dry-run) not launching\n" << Qt::flush;
         return 0;
+    }
+
+    for (const auto &c : m.cfg.classes()) {
+        if (c.id == Config::normalizeClassId(chosen)) {
+            if (execMissing(c.exec)) { err << "Emulator/exec missing for class " << c.id << ": " << c.exec << "\n" << Qt::flush; return 5; }
+            break;
+        }
     }
 
     m.kb.recordDecision(pr, chosen, d.ask, overridden);
     auto lr = m.launcher.launchClass(chosen, pr.launchPath());
     if (!lr.ok && m.cfg.fallbackAction() == QStringLiteral("ask")) {
-        // try fallback else
         const auto fb = m.cfg.fallbackElse();
         if (!fb.isEmpty()) lr = m.launcher.launchCommand(fb.first(), fb.mid(1), pr.launchPath());
     }
     m.kb.save();
     out << lr.message << "\n" << Qt::flush;
-    return lr.ok ? 0 : 5;
+    if (lr.ok) return 0;
+    if (lr.message.contains(QStringLiteral("unknown class"))) return 4;
+    if (lr.message.contains(QStringLiteral("failed to launch")) || lr.message.contains(QStringLiteral("empty exec"))) return 5;
+    return 1;
 }
 
 int Cli::cmdLearn(const QStringList &a)

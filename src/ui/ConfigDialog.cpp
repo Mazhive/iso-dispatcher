@@ -17,16 +17,20 @@ namespace iso {
 ConfigDialog::ConfigDialog(Config &cfg, const QString &configPath, QWidget *parent)
     : QDialog(parent), m_cfg(cfg), m_configPath(configPath)
 {
-    setWindowTitle(QStringLiteral("Config bewerken - iso-dispatcher"));
+    const bool nl = m_cfg.language() == QStringLiteral("nl");
+    setWindowTitle(nl ? QStringLiteral("Config bewerken - iso-dispatcher") : QStringLiteral("Edit Config - iso-dispatcher"));
     resize(980, 560);
 
     auto *root = new QVBoxLayout(this);
     root->addWidget(new QLabel(QStringLiteral("Config: ") + m_configPath, this));
-    root->addWidget(new QLabel(QStringLiteral("Bewerk per klasse de launcher. Args: gebruik %f voor ISO-pad, %e voor entry. Geen pad/folder-regels voor detectie."), this));
+    root->addWidget(new QLabel(nl ? QStringLiteral("Bewerk per klasse de launcher. Args: gebruik %f voor ISO-pad, %e voor entry. Geen pad/folder-regels voor detectie.")
+                                  : QStringLiteral("Edit the launcher per class. Args: use %f for ISO path, %e for entry. No path/folder rules for detection."), this));
 
     m_table = new QTableWidget(this);
     m_table->setColumnCount(5);
-    m_table->setHorizontalHeaderLabels({QStringLiteral("id"), QStringLiteral("label"), QStringLiteral("exec"), QStringLiteral("args (spatie-gescheiden, %f/%e)"), QStringLiteral("priority")});
+    m_table->setHorizontalHeaderLabels({QStringLiteral("id"), QStringLiteral("label"), QStringLiteral("exec"),
+                                        nl ? QStringLiteral("args (spatie-gescheiden, %f/%e)") : QStringLiteral("args (space-separated, %f/%e)"),
+                                        nl ? QStringLiteral("prioriteit") : QStringLiteral("priority")});
     m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     m_table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
@@ -34,16 +38,16 @@ ConfigDialog::ConfigDialog(Config &cfg, const QString &configPath, QWidget *pare
     root->addWidget(m_table, 1);
 
     auto *rowBtns = new QHBoxLayout();
-    auto *addBtn = new QPushButton(QStringLiteral("Rij toevoegen"), this);
-    auto *delBtn = new QPushButton(QStringLiteral("Rij verwijderen"), this);
-    auto *browseExecBtn = new QPushButton(QStringLiteral("Blader exec..."), this);
+    auto *addBtn = new QPushButton(nl ? QStringLiteral("Rij toevoegen") : QStringLiteral("Add row"), this);
+    auto *delBtn = new QPushButton(nl ? QStringLiteral("Rij verwijderen") : QStringLiteral("Remove row"), this);
+    auto *browseExecBtn = new QPushButton(nl ? QStringLiteral("Browse exec...") : QStringLiteral("Browse exec..."), this);
     rowBtns->addWidget(addBtn);
     rowBtns->addWidget(delBtn);
     rowBtns->addWidget(browseExecBtn);
     rowBtns->addStretch(1);
     root->addLayout(rowBtns);
 
-    auto *fbBox = new QGroupBox(QStringLiteral("Fallback (als launch faalt)"), this);
+    auto *fbBox = new QGroupBox(nl ? QStringLiteral("Fallback (als launch faalt)") : QStringLiteral("Fallback (if launch fails)"), this);
     auto *fbForm = new QFormLayout(fbBox);
     m_fallbackExec = new QLineEdit(this);
     m_fallbackArgs = new QLineEdit(this);
@@ -52,9 +56,9 @@ ConfigDialog::ConfigDialog(Config &cfg, const QString &configPath, QWidget *pare
     root->addWidget(fbBox);
 
     auto *actions = new QHBoxLayout();
-    auto *reloadBtn = new QPushButton(QStringLiteral("Herladen"), this);
-    auto *saveBtn = new QPushButton(QStringLiteral("Opslaan"), this);
-    auto *closeBtn = new QPushButton(QStringLiteral("Sluiten"), this);
+    auto *reloadBtn = new QPushButton(nl ? QStringLiteral("Herladen") : QStringLiteral("Reload"), this);
+    auto *saveBtn = new QPushButton(nl ? QStringLiteral("Opslaan") : QStringLiteral("Save"), this);
+    auto *closeBtn = new QPushButton(nl ? QStringLiteral("Sluiten") : QStringLiteral("Close"), this);
     actions->addWidget(reloadBtn);
     actions->addStretch(1);
     actions->addWidget(saveBtn);
@@ -129,18 +133,21 @@ void ConfigDialog::onSave()
 {
     saveToConfig();
     QString err;
+    const bool nl = m_cfg.language() == QStringLiteral("nl");
     if (!m_cfg.save(m_configPath, &err)) {
-        QMessageBox::warning(this, QStringLiteral("Opslaan mislukt"), err);
+        QMessageBox::warning(this, nl ? QStringLiteral("Save failed") : QStringLiteral("Save failed"), err);
         return;
     }
-    QMessageBox::information(this, QStringLiteral("Opgeslagen"), QStringLiteral("Config opgeslagen naar:\n") + m_configPath);
+    QMessageBox::information(this, nl ? QStringLiteral("Saved") : QStringLiteral("Saved"),
+                             (nl ? QStringLiteral("Config opgeslagen naar:\n") : QStringLiteral("Config saved to:\n")) + m_configPath);
 }
 
 void ConfigDialog::onReload()
 {
     QString err;
+    const bool nl = m_cfg.language() == QStringLiteral("nl");
     if (!m_cfg.load(m_configPath, &err)) {
-        QMessageBox::warning(this, QStringLiteral("Laden mislukt"), err);
+        QMessageBox::warning(this, nl ? QStringLiteral("Load failed") : QStringLiteral("Load failed"), err);
         return;
     }
     loadFromConfig();
@@ -165,15 +172,18 @@ void ConfigDialog::onRemoveRow()
 
 void ConfigDialog::onBrowseExec()
 {
+    const bool nl = m_cfg.language() == QStringLiteral("nl");
     int r = m_table->currentRow();
     if (r < 0) {
-        QMessageBox::information(this, QStringLiteral("Geen rij geselecteerd"), QStringLiteral("Selecteer eerst een klasse-rij."));
+        QMessageBox::information(this, nl ? QStringLiteral("No row selected") : QStringLiteral("No row selected"),
+                                 nl ? QStringLiteral("Selecteer eerst een klasse-rij.") : QStringLiteral("Select a class row first."));
         return;
     }
     auto *it = m_table->item(r, 2);
     const QString current = it ? it->text() : QString();
-    const QString f = QFileDialog::getOpenFileName(this, QStringLiteral("Kies executable"), current.isEmpty() ? QStringLiteral("/usr/bin") : current,
-                                                   QStringLiteral("Programma's (*)"));
+    const QString f = QFileDialog::getOpenFileName(this, nl ? QStringLiteral("Choose executable") : QStringLiteral("Choose executable"),
+                                                   current.isEmpty() ? QStringLiteral("/usr/bin") : current,
+                                                   nl ? QStringLiteral("Programs (*)") : QStringLiteral("Programs (*)"));
     if (f.isEmpty()) return;
     if (!it) { it = new QTableWidgetItem(); m_table->setItem(r, 2, it); }
     it->setText(f);

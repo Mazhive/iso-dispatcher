@@ -60,6 +60,7 @@ struct ProbeResult {
     QList<Feature> features;
     QStringList warnings;           // non-fatal: e.g. isoinfo missing
     QString error;
+    int errorCode = 0;              // 0=ok, 2=marker invalid, 3=entry/ref missing/invalid, 4=unknown class
 
     // Boot-marker shortcut (portable fake .iso/.txt marker pointing to a real entry).
     bool bootMarker = false;
@@ -80,6 +81,7 @@ struct ScoreBreak {
     double base = 0.0;              // deterministic rules from config
     double learned = 0.0;           // DB weight contribution (capped)
     double total = 0.0;
+    int priority = 0;               // class priority from config (higher = preferred on tie)
     QStringList reasons;
 };
 
