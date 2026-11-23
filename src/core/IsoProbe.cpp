@@ -237,8 +237,26 @@ ProbeResult IsoProbe::probe(const QString &isoPath) const
     ProbeResult r;
     QFileInfo fi(isoPath);
     r.path = fi.absoluteFilePath();
-    r.size = fi.size();
-    if (!fi.exists() || !fi.isFile()) { r.error = QStringLiteral("file not found"); return r; }
+    r.size = fi.isFile() ? fi.size() : 0;
+    if (!fi.exists()) { r.error = QStringLiteral("file not found"); return r; }
+
+    // Directory: prefer boot marker inside, else fail clearly.
+    if (fi.isDir()) {
+        const QDir d(fi.absoluteFilePath());
+        const QStringList markers = d.entryList(
+            {QStringLiteral("*.ps1boot.iso"), QStringLiteral("*.ps2boot.iso"),
+             QStringLiteral("*.ps3boot.iso"), QStringLiteral("*.pspboot.iso"),
+             QStringLiteral("*.psxboot.iso")},
+            QDir::Files, QDir::Name);
+        if (!markers.isEmpty()) {
+            return probe(d.absoluteFilePath(markers.first()));
+        }
+        r.error = QStringLiteral("directory has no boot marker: %1").arg(r.path);
+        r.errorCode = 2;
+        return r;
+    }
+
+    if (!fi.isFile()) { r.error = QStringLiteral("file not found"); return r; }
 
     // Boot-marker shortcut: portable text file that points to a real launch entry.
     {

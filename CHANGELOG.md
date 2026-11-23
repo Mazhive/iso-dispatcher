@@ -4,10 +4,18 @@ All notable changes to `iso-dispatcher` are documented in this file.
 
 ## Versioning & builds
 
-- **Version**: `MAJOR.MINOR.PATCH` (current: `0.0.5`)
+- **Version**: `MAJOR.MINOR.PATCH` (current: `0.0.6`)
 - **Versioned builds**: place built binaries in `build/Build-versions/`
 - **Naming**: `iso-dispatcher-<version>-linux-x86_64` (append `-<shortsha>` or `-<date>` if needed for same-version dev snapshots)
 - **On new change/build**: bump version in source (`src/cli/Cli.cpp` about/version, `src/ui/MainWindow.cpp` About), update this changelog, rebuild, and copy the new binary to `build/Build-versions/` with the new version name. Keep previous versioned binaries for traceability.
+
+## [0.0.6] - 2026-11-23
+
+### Fixed
+- `IsoProbe`: accept directory input when it contains a boot marker (`*.ps1/ps2/ps3/psp/psxboot.iso`), resolving to that marker instead of failing with "file not found".
+
+### Verified
+- PS3 JB dir `BLES-01236-SONIC_GENERATIONS(PS3)` with `ps3boot.iso` marker: `launch --class ps3 --dry-run` resolves marker/entry/EBOOT correctly.
 
 ## [0.0.5] - 2026-11-23
 
