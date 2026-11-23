@@ -301,7 +301,26 @@ iso-dispatcher config path|init|get|set
 iso-dispatcher --help | -h | ?
 ```
 
-Exitcodes: `0=ok`, `2=ongeldige argumenten`, `3=afgebroken wegens ambiguïteit in headless-modus`, `4=geannuleerd`, `5=start mislukt`.
+Exitcodes: `0=ok`, `1=algemene/gebruikersfout`, `2=marker ongeldig`, `3=entry/referentie ontbreekt of ongeldig`, `4=class onbekend/niet geconfigureerd`, `5=emulator/exec ontbreekt of starten mislukt`.
+
+## Boot markers
+
+`iso-dispatcher` ondersteunt portable boot-markers (tekstbestanden die beginnen met `ISO-DISPATCHER-BOOT`).
+
+Formaat:
+
+```text
+ISO-DISPATCHER-BOOT
+class=ps1
+entry=Game.cue
+```
+
+Validatie voor launch/classify:
+- verplichte velden `class` en `entry` (of bekende auto-resolve voor PS2/PS3/PS4 layouts)
+- `entry` moet relatief/veilig zijn (geen absoluut pad, geen `..` traversal)
+- entry moet bestaan en leesbaar zijn
+- voor `.cue` entries worden `FILE`-referenties gevalideerd
+- class-alias: `psx -> ps1`
 
 ## GUI
 
