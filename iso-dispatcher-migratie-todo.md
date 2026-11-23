@@ -130,26 +130,26 @@
 **Bestanden:** `game-gui-fork.py`, `EMU-LAUNCHERS/emulation.conf`, `~/.config/gamelauncher/emulators.json`, `README-game-gui-fork.md`, `gui-version/changelog.md`
 
 ### D1. `_start_emu` geschikt maken voor iso-dispatcher flow
-- [ ] Wijziging: voor ISO/disc systems direct `iso-dispatcher launch` of via aangepaste `emu-launch.sh`; houd één pad leidend.
-- [ ] Wijziging: map `psx` UI-systeem naar iso-dispatcher `ps1` bij directe call.
-- [ ] Test 1: klik PSX game/marker in fork → emulator start.
-- [ ] Test 2: PS2/PSP/Wii/Xbox smoke test via fork.
-- [ ] Test 3: draaiende game dubbel starten → bestaande “draait al/focus” gedrag blijft werken.
+- [x] Wijziging: ISO/disc-systemen (`psx/ps1/ps2/ps3/psp/gamecube/wii/wiiu/xbox/xbox360/dvd`) gaan via één leidend pad: `emu-launch.sh` (die iso-dispatcher-first doet). `psx->ps1` mapping zit in emu-launch.sh.
+- [x] Wijziging: ontbrekende emu in conf blokkeert ISO-first systemen niet meer in GUI; emu-launch.sh handelt af/fallback.
+- [ ] Test 1: klik PSX game/marker in fork → emulator start (handmatige GUI-smoke nog nodig).
+- [ ] Test 2: PS2/PSP/Wii/Xbox smoke test via fork (handmatig).
+- [x] Test 3: "draait al/focus" gedrag ongewijzigd in code.
 
 ### D2. Ontbrekende-emulator afhandeling aanpassen
-- [ ] Wijziging: als iso-dispatcher exec ontbreekt, geef fout met class/exec uit iso-dispatcher config. Houd `emu-install.sh` alleen waar fallback/conf-pad dat nog gebruikt.
-- [ ] Test: zet tijdelijk een ongeldige exec in iso-dispatcher config voor testclass — verwacht: duidelijke GUI-melding, geen stille failure.
+- [x] Wijziging: GUI toont specifiekere hint bij iso-dispatcher/exec-missing failures (exit 5/log-detectie); fallback/install blijft via emu-launch.sh/conf-pad.
+- [ ] Test: ongeldige exec in iso-dispatcher config voor testclass → duidelijke GUI-melding (handmatige GUI-smoke nog nodig).
 
 ### D3. Config-afhankelijkheden reduceren
-- [ ] Wijziging: `load_emulation_conf`/`emulation_conf_path` niet meer verplicht voor ISO-systems. Gebruik iso-dispatcher config/CLI waar nodig.
-- [ ] Wijziging: behoud conf alleen voor niet-ISO systemen tijdens migratie.
-- [ ] Test 1: ISO-systeem start zonder geldige `emulation.conf` entry voor dat systeem — verwacht: werkt via iso-dispatcher.
-- [ ] Test 2: niet-ISO systeem met conf/fallback — verwacht: werkt nog zoals voorheen.
+- [x] Wijziging: `emu-launch.sh` waarschuwt maar faalt niet hard bij ontbrekende conf/sectie voor ISO-dispatcher classes; ISO-first kan door. GUI blokkeert ISO-first niet op ontbrekende emu in conf.
+- [x] Wijziging: conf/fallback behouden voor niet-ISO systemen.
+- [x] Test 1: PSX marker zonder conf-file + fake dispatcher → iso-dispatcher-first succes, exit 0.
+- [x] Test 2: niet-ISO/fallback pad behouden (eerder C4/C5 geverifieerd).
 
 ### D4. Marker-first game-detectie
-- [ ] Wijziging: scanner/UI prefereert `.psXboot.iso` markers als startbare items; voorkom dubbel tonen van marker + onderliggende rom waar ongewenst.
-- [ ] Test 1: map met marker + cue/bin toont één startbaar item (of duidelijke regel).
-- [ ] Test 2: marker launch gebruikt entry uit marker correct.
+- [x] Wijziging: scanner filtert bijbehorende payload-bestanden weg wanneer boot markers aanwezig zijn (`_prefer_boot_markers`); boot markers worden als startbare items behouden.
+- [ ] Test 1: map met marker + cue/bin toont één startbaar item (code-logica toegevoegd; handmatige GUI-scan nog nodig).
+- [ ] Test 2: marker launch gebruikt entry uit marker correct (door iso-dispatcher/emu-launch.sh pad; end-to-end GUI smoke nog nodig).
 
 ### D5. Metadata/titels/icons zonder emulation.conf
 - [ ] Wijziging: systeemtitels/icons uit fork-mapping/iso-dispatcher of eigen lichte mapping halen; niet afhankelijk van volledige emulation.conf voor ISO systems.
