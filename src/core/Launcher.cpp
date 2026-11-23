@@ -1,0 +1,50 @@
+#include "Launcher.h"
+
+#include <QProcess>
+#include <QFileInfo>
+
+namespace iso {
+
+Launcher::Launcher(const Config &cfg) : m_cfg(cfg) {}
+
+QStringList Launcher::substitute(const QStringList &argsTemplate, const QString &isoPath, const QString &entry)
+{
+    QStringList out;
+    for (const QString &a : argsTemplate) {
+        QString s = a;
+        s.replace(QStringLiteral("%f"), isoPath);
+        s.replace(QStringLiteral("%e"), entry);
+        out << s;
+    }
+    return out;
+}
+
+Launcher::Result Launcher::launchCommand(const QString &exec, const QStringList &argsTemplate, const QString &isoPath, const QString &entry) const
+{
+    Result r;
+    if (exec.trimmed().isEmpty()) { r.message = QStringLiteral("empty exec"); return r; }
+    // Safety: never recursively dispatch the same ISO through generic openers.
+    const QString e = exec.trimmed().toLower();
+    if (e == QStringLiteral("xdg-open") || e == QStringLiteral("gio") || e == QStringLiteral("kde-open")) {
+        r.message = QStringLiteral("refusing recursive opener; use explicit app exec");
+        return r;
+    }
+    const QStringList args = substitute(argsTemplate, isoPath, entry);
+    qint64 pid = 0;
+    const bool ok = QProcess::startDetached(exec, args, QFileInfo(isoPath).absolutePath(), &pid);
+    r.ok = ok;
+    r.pid = pid;
+    r.message = ok ? QStringLiteral("launched %1 pid=%2").arg(exec).arg(pid)
+                   : QStringLiteral("failed to launch %1").arg(exec);
+    return r;
+}
+
+Launcher::Result Launcher::launchClass(const QString &classId, const QString &isoPath, const QString &entry) const
+{
+    for (const auto &c : m_cfg.classes()) {
+        if (c.id == classId) return launchCommand(c.exec, c.args, isoPath, entry);
+    }
+    Result r; r.message = QStringLiteral("unknown class: ") + classId; return r;
+}
+
+} // namespace iso

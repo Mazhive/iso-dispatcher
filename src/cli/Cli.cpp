@@ -1,0 +1,290 @@
+#include "Cli.h"
+#include "core/Util.h"
+
+#include <QDirIterator>
+#include <QFileInfo>
+#include <QJsonDocument>
+#include <QTextStream>
+#include <iostream>
+
+namespace iso {
+
+static QTextStream out(stdout);
+static QTextStream err(stderr);
+
+Cli::Cli(Context ctx) : m(ctx) {}
+
+QString Cli::helpText()
+{
+    return QStringLiteral(
+        "iso-dispatcher - content-based ISO classifier/launcher\n\n"
+        "Usage:\n"
+        "  iso-dispatcher                          Start GUI\n"
+        "  iso-dispatcher <file.iso>               Classify and launch (asks on low confidence)\n"
+        "  iso-dispatcher gui [file.iso]           Start GUI, optionally preloading an ISO\n"
+        "  iso-dispatcher classify <file.iso>      Classify only, print decision\n"
+        "  iso-dispatcher why <file.iso>           Show full score/evidence breakdown\n"
+        "  iso-dispatcher launch <file.iso> [--class id] [--dry-run]\n"
+        "  iso-dispatcher learn <dir> [--dry-run] [--limit N]  Seed knowledge from ISO library\n"
+        "  iso-dispatcher stats                    Knowledge stats\n"
+        "  iso-dispatcher decisions [N]            Recent decisions\n"
+        "  iso-dispatcher forget <fingerprint>     Forget a learned fingerprint\n"
+        "  iso-dispatcher export <path.json>       Export knowledge\n"
+        "  iso-dispatcher config path              Print config path\n"
+        "  iso-dispatcher config init              Write default config\n"
+        "  iso-dispatcher config get <key>         Get config value (dot path, e.g. scan/window_bytes)\n"
+        "  iso-dispatcher config set <key> <val>   Set config value\n"
+        "  iso-dispatcher about                    Show about / required emulators\n"
+        "  iso-dispatcher --help | -h | ?          This help\n\n"
+        "Notes:\n"
+        "  - Classification is CONTENT-ONLY. No folder/path rules are used.\n"
+        "  - Config: $HOME/.config/iso-dispatcher.json\n"
+        "  - Knowledge: configured by learn/db (default ~/.local/share/iso-dispatcher/knowledge.json)\n");
+}
+
+int Cli::run(const QStringList &args)
+{
+    if (args.size() <= 1) return -1; // GUI
+    const QString cmd = args.at(1).trimmed();
+    if (cmd == QStringLiteral("--help") || cmd == QStringLiteral("-h") || cmd == QStringLiteral("?") || cmd == QStringLiteral("help")) {
+        out << helpText() << Qt::flush;
+        return 0;
+    }
+    if (cmd == QStringLiteral("gui")) return -1;
+    if (cmd == QStringLiteral("classify")) return cmdClassify(args.mid(2));
+    if (cmd == QStringLiteral("why")) return cmdWhy(args.mid(2));
+    if (cmd == QStringLiteral("launch")) return cmdLaunch(args.mid(2));
+    if (cmd == QStringLiteral("learn")) return cmdLearn(args.mid(2));
+    if (cmd == QStringLiteral("stats")) return cmdStats();
+    if (cmd == QStringLiteral("decisions")) return cmdDecisions(args.mid(2));
+    if (cmd == QStringLiteral("forget")) return cmdForget(args.mid(2));
+    if (cmd == QStringLiteral("export")) return cmdExport(args.mid(2));
+    if (cmd == QStringLiteral("config")) return cmdConfig(args.mid(2));
+    if (cmd == QStringLiteral("about") || cmd == QStringLiteral("--about")) {
+        out << "iso-dispatcher - content-based ISO classifier/launcher\n\n"
+            << "De volgende emulators/applicaties zijn noodzakelijk voor iso-dispatcher om te functioneren:\n"
+            << "  - PS1 / PSX : DuckStation of RetroArch (PSX core)\n"
+            << "  - PS2       : PCSX2 of andere PS2-emulator\n"
+            << "  - PS3       : RPCS3\n"
+            << "  - PS4       : shadPS4 (shadPS4QtLauncher)\n"
+            << "  - PSP       : PPSSPP\n"
+            << "  - Wii/GameCube: Dolphin\n"
+            << "  - Xbox      : xemu of andere Xbox-emulator\n"
+            << "  - Amiga     : FS-UAE / UAE / RetroArch Amiga core\n"
+            << "  - PC/DOS    : DOSBox, Wine of native applicatie (afhankelijk van image)\n\n"
+            << "Configureer exacte paden/argumenten via 'Config bewerken' of ~/.config/iso-dispatcher.json.\n" << Qt::flush;
+        return 0;
+    }
+
+    // If it looks like a file, treat as launch.
+    QFileInfo fi(cmd);
+    if (fi.exists() && fi.isFile()) {
+        QStringList a; a << cmd;
+        return cmdLaunch(a);
+    }
+
+    err << "Unknown command: " << cmd << "\nUse --help or ?\n" << Qt::flush;
+    return 2;
+}
+
+int Cli::cmdClassify(const QStringList &a)
+{
+    if (a.isEmpty()) { err << "classify: missing <file.iso>\n"; return 2; }
+    const ProbeResult pr = m.probe.probe(a.first());
+    if (!pr.error.isEmpty()) { err << pr.error << "\n"; return 1; }
+    const Decision d = m.classifier.classify(pr);
+    QJsonObject o;
+    o.insert(QStringLiteral("file"), pr.path);
+    o.insert(QStringLiteral("fingerprint"), pr.fingerprint);
+    o.insert(QStringLiteral("class"), d.classId);
+    o.insert(QStringLiteral("label"), d.label(m.cfg.classes()));
+    o.insert(QStringLiteral("score"), d.score);
+    o.insert(QStringLiteral("confidence"), d.confidence);
+    o.insert(QStringLiteral("ask"), d.ask);
+    QJsonArray feats; for (const auto &f : pr.features) feats.append(f.text()); o.insert(QStringLiteral("features"), feats);
+    if (!pr.warnings.isEmpty()) { QJsonArray w; for (const auto &x : pr.warnings) w.append(x); o.insert(QStringLiteral("warnings"), w); }
+    out << QJsonDocument(o).toJson(QJsonDocument::Indented) << Qt::flush;
+    return 0;
+}
+
+int Cli::cmdWhy(const QStringList &a)
+{
+    if (a.isEmpty()) { err << "why: missing <file.iso>\n"; return 2; }
+    const ProbeResult pr = m.probe.probe(a.first());
+    if (!pr.error.isEmpty()) { err << pr.error << "\n"; return 1; }
+    const Decision d = m.classifier.classify(pr);
+    for (const QString &line : m.classifier.explain(pr, d)) out << line << "\n";
+    for (const QString &w : pr.warnings) err << "WARNING: " << w << "\n";
+    if (!pr.warnings.isEmpty()) err << Qt::flush;
+    out << Qt::flush;
+    return 0;
+}
+
+int Cli::cmdLaunch(const QStringList &a)
+{
+    if (a.isEmpty()) { err << "launch: missing <file.iso>\n"; return 2; }
+    QString iso; QString forceClass; bool dry = false;
+    for (int i = 0; i < a.size(); ++i) {
+        const QString x = a.at(i);
+        if (x == QStringLiteral("--class") && i + 1 < a.size()) { forceClass = a.at(++i); }
+        else if (x == QStringLiteral("--dry-run")) dry = true;
+        else if (iso.isEmpty()) iso = x;
+    }
+    const ProbeResult pr = m.probe.probe(iso);
+    if (!pr.error.isEmpty()) { err << pr.error << "\n"; return 1; }
+    Decision d = m.classifier.classify(pr);
+    QString chosen = forceClass.isEmpty() ? d.classId : forceClass;
+    bool overridden = !forceClass.isEmpty() && forceClass != d.classId;
+
+    if (forceClass.isEmpty() && d.ask) {
+        if (m.cfg.headless() == QStringLiteral("abort")) { err << "ambiguous; ask disabled in headless mode\n"; return 3; }
+        // Simple terminal menu.
+        out << "Uncertain classification for: " << pr.path << "\n";
+        out << "Best guess: " << d.classId << " score=" << d.score << " conf=" << d.confidence << "\n";
+        if (m.cfg.showEvidence()) {
+            out << "Evidence: "; for (const auto &f : pr.features.mid(0, 12)) out << f.text() << " "; out << "\n";
+        }
+        const auto classes = m.cfg.classes();
+        for (int i = 0; i < classes.size(); ++i) out << QStringLiteral("  %1) %2 [%3]\n").arg(i + 1).arg(classes[i].label, classes[i].id);
+        out << "Select number (Enter=best guess, q=cancel): " << Qt::flush;
+        std::string line; std::getline(std::cin, line);
+        QString sel = QString::fromLocal8Bit(line.c_str()).trimmed();
+        if (sel.compare(QStringLiteral("q"), Qt::CaseInsensitive) == 0) {
+            m.kb.negativeCache(pr.fingerprint); m.kb.save(); return 4;
+        }
+        if (!sel.isEmpty()) {
+            bool ok = false; int idx = sel.toInt(&ok);
+            if (ok && idx >= 1 && idx <= classes.size()) { chosen = classes[idx - 1].id; overridden = chosen != d.classId; }
+            else { chosen = sel; overridden = chosen != d.classId; }
+        }
+        m.kb.rememberFingerprint(pr.fingerprint, chosen);
+    }
+
+    if (chosen.isEmpty()) chosen = m.cfg.fallbackElse().value(0);
+    out << "Chosen class: " << chosen << "\n";
+    if (dry) {
+        // Resolve command for display
+        bool found = false;
+        for (const auto &c : m.cfg.classes()) {
+            if (c.id == chosen) {
+                out << "Exec: " << c.exec << "\n";
+                out << "Args: " << Launcher::substitute(c.args, pr.launchPath(), QString()).join(QLatin1Char(' ')) << "\n";
+                found = true; break;
+            }
+        }
+        if (!found) {
+            const auto fb = m.cfg.fallbackElse();
+            if (!fb.isEmpty()) out << "Exec: " << fb.first() << "\nArgs: " << Launcher::substitute(fb.mid(1), pr.launchPath(), QString()).join(QLatin1Char(' ')) << "\n";
+        }
+        out << "(dry-run) not launching\n";
+        return 0;
+    }
+
+    m.kb.recordDecision(pr, chosen, d.ask, overridden);
+    auto lr = m.launcher.launchClass(chosen, pr.launchPath());
+    if (!lr.ok && m.cfg.fallbackAction() == QStringLiteral("ask")) {
+        // try fallback else
+        const auto fb = m.cfg.fallbackElse();
+        if (!fb.isEmpty()) lr = m.launcher.launchCommand(fb.first(), fb.mid(1), pr.launchPath());
+    }
+    m.kb.save();
+    out << lr.message << "\n" << Qt::flush;
+    return lr.ok ? 0 : 5;
+}
+
+int Cli::cmdLearn(const QStringList &a)
+{
+    if (a.isEmpty()) { err << "learn: missing <dir>\n"; return 2; }
+    QString dir; bool dry = false; int limit = 0;
+    for (int i = 0; i < a.size(); ++i) {
+        const QString x = a.at(i);
+        if (x == QStringLiteral("--dry-run")) dry = true;
+        else if (x == QStringLiteral("--limit") && i + 1 < a.size()) limit = a.at(++i).toInt();
+        else if (dir.isEmpty()) dir = x;
+    }
+    int count = 0, learned = 0;
+    QDirIterator it(dir, {QStringLiteral("*.iso"), QStringLiteral("*.ISO"), QStringLiteral("*.cue"), QStringLiteral("*.CUE"), QStringLiteral("*.ccd"), QStringLiteral("*.CCD"), QStringLiteral("*.mds"), QStringLiteral("*.MDS"), QStringLiteral("*.chd"), QStringLiteral("*.CHD"), QStringLiteral("*.pbp"), QStringLiteral("*.PBP")}, QDir::Files, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        const QString f = it.next();
+        if (limit > 0 && count >= limit) break;
+        ++count;
+        const ProbeResult pr = m.probe.probe(f);
+        if (!pr.error.isEmpty()) { err << "skip: " << f << " : " << pr.error << "\n"; continue; }
+        const Decision d = m.classifier.classify(pr);
+        out << QStringLiteral("[%1] %2 -> %3 score=%4 ask=%5\n").arg(count).arg(QFileInfo(f).fileName(), d.classId).arg(d.score, 0, 'f', 1).arg(d.ask ? "yes" : "no");
+        if (!dry && !d.ask && !d.classId.isEmpty()) {
+            m.kb.recordDecision(pr, d.classId, false, false);
+            ++learned;
+        }
+    }
+    if (!dry) m.kb.save();
+    out << "Scanned: " << count << ", learned: " << learned << (dry ? " (dry-run)" : "") << "\n" << Qt::flush;
+    return 0;
+}
+
+int Cli::cmdStats()
+{
+    out << QJsonDocument(m.kb.stats(m.cfg.classes())).toJson(QJsonDocument::Indented) << Qt::flush;
+    return 0;
+}
+
+int Cli::cmdDecisions(const QStringList &a)
+{
+    int n = 20;
+    if (!a.isEmpty()) n = a.first().toInt();
+    out << QJsonDocument(m.kb.recentDecisions(n)).toJson(QJsonDocument::Indented) << Qt::flush;
+    return 0;
+}
+
+int Cli::cmdForget(const QStringList &a)
+{
+    if (a.isEmpty()) { err << "forget: missing <fingerprint>\n"; return 2; }
+    const bool ok = m.kb.forgetFingerprint(a.first());
+    if (ok) m.kb.save();
+    out << (ok ? "forgotten\n" : "not found\n") << Qt::flush;
+    return ok ? 0 : 1;
+}
+
+int Cli::cmdExport(const QStringList &a)
+{
+    if (a.isEmpty()) { err << "export: missing <path>\n"; return 2; }
+    QString e;
+    const bool ok = m.kb.exportJson(a.first(), &e);
+    if (!ok) err << e << "\n";
+    else out << "exported to " << a.first() << "\n";
+    out << Qt::flush;
+    return ok ? 0 : 1;
+}
+
+int Cli::cmdConfig(const QStringList &a)
+{
+    if (a.isEmpty()) { err << "config: need init|get|set|path\n"; return 2; }
+    const QString sub = a.first();
+    if (sub == QStringLiteral("path")) { out << m.configPath << "\n"; return 0; }
+    if (sub == QStringLiteral("init")) {
+        QString e; bool ok = Config::writeDefaults(m.configPath, &e);
+        if (!ok) { err << e << "\n"; return 1; }
+        out << "wrote " << m.configPath << "\n"; return 0;
+    }
+    if (sub == QStringLiteral("get")) {
+        if (a.size() < 2) { err << "config get: missing key\n"; return 2; }
+        out << QJsonDocument(QJsonObject{{a.at(1), QJsonValue::fromVariant(m.cfg.get(a.at(1)))}}).toJson(QJsonDocument::Compact) << "\n";
+        return 0;
+    }
+    if (sub == QStringLiteral("set")) {
+        if (a.size() < 3) { err << "config set: missing key value\n"; return 2; }
+        // Simple typed parse: bool/int/double/json/string.
+        const QString key = a.at(1);
+        const QString val = a.mid(2).join(QLatin1Char(' '));
+        QVariant v;
+        if (val == QStringLiteral("true")) v = true;
+        else if (val == QStringLiteral("false")) v = false;
+        else { bool ok=false; int i=val.toInt(&ok); if(ok) v=i; else { double d=val.toDouble(&ok); if(ok && val.contains('.')) v=d; else v=val; } }
+        m.cfg.set(key, v);
+        QString e; if (!m.cfg.save(m.configPath, &e)) { err << e << "\n"; return 1; }
+        out << "ok\n"; return 0;
+    }
+    err << "unknown config subcommand\n"; return 2;
+}
+
+} // namespace iso
