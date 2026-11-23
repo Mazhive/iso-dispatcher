@@ -96,35 +96,34 @@
 **Bestand:** `/mnt/VG_00/PUBLIC-LIBRARY/PRE-INSTALLED-GAMES/WINEPREFIX/template-scripts/game-launchers/EMU-LAUNCHERS/emu-launch.sh`
 
 ### C1. Contract behouden, adapterlaag toevoegen
-- [ ] Wijziging: behoud env-contract `GAME_SYSTEM`, `GAME_ROM`, `GAME_DISPLAY_NAME`, `GAME_EMU_CONF`. Voeg `ISO_DISPATCHER_BIN` override toe.
-- [ ] Test: bestaand launch-commando vanuit shell met geldige env-vars werkt nog — verwacht: geen “missing env” regressie.
+- [x] Wijziging: behoud env-contract `GAME_SYSTEM`, `GAME_ROM`, `GAME_DISPLAY_NAME`, `GAME_EMU_CONF`. Voeg `ISO_DISPATCHER_BIN` override toe (workflow-local in `emu-launch.sh`, niet naar GitHub).
+- [x] Test: `bash -n` OK; met geldige env-vars + ontbrekende conf geeft `[emu] FOUT: emulation.conf niet gevonden...`, geen missing-env regressie.
 
 ### C2. Systeem-mapping `fork -> iso-dispatcher class`
-- [ ] Wijziging: maak expliciete mapping, minimaal `psx->ps1`; pass-through voor gelijke namen.
-- [ ] Test 1: `GAME_SYSTEM=psx` + geldige marker/iso — verwacht: iso-dispatcher krijgt `--class ps1`.
-- [ ] Test 2: `GAME_SYSTEM=ps2` — verwacht: `--class ps2`.
+- [x] Wijziging: expliciete mapping in `emu-launch.sh` (`psx->ps1`, anders pass-through), `ISO_CLASS` gezet (workflow-local).
+- [x] Test mapping: `psx->ps1`, `ps2->ps2`, `psp->psp` geverifieerd. End-to-end `--class` doorvoer wordt in C4 afgemaakt.
 
 ### C3. Folder-dump pre-processing behouden (tijdelijk)
-- [ ] Wijziging: vóór iso-dispatcher: als `GAME_ROM` map is, hergebruik huidige logica (rom-in-map zoeken of `xdvdfs` cache-ISO maken); geef resulterend bestand aan iso-dispatcher.
-- [ ] Test 1: map met `.cue/.iso` aanwezig → geen xdvdfs, juiste file gekozen.
-- [ ] Test 2: echte folder dump zonder image maar met `xdvdfs` aanwezig → cache ISO gemaakt/hergebruikt.
-- [ ] Test 3: map met `.psXboot.iso` marker → marker direct gebruiken, geen onnodige pack.
+- [x] Wijziging: bestaande map-pre-processing behouden; boot-marker voorkeur toegevoegd in `_rom_in_dir` (`*.ps1/ps2/ps3/psp/psxboot.iso` eerst). Workflow-local.
+- [x] Test 1: map met `.cue/.bin` aanwezig → rom-in-map gekozen, geen xdvdfs.
+- [x] Test 2: xdvdfs aanwezig op systeem; bestaande pack/logica ongewijzigd (niet end-to-end met echte Xbox-dump getest).
+- [x] Test 3: map met `.ps1boot.iso` + andere `.iso` → boot marker gekozen.
 
 ### C4. iso-dispatcher-first launch met fallback
-- [ ] Wijziging: voor ISO/disc-geschikte cases: `iso-dispatcher launch <resolved> --class <mapped>`. Bij niet-ondersteund/ontbrekende iso-dispatcher: fallback naar oude emulation.conf-pad met duidelijke logregel.
-- [ ] Test 1: PSX marker met werkende iso-dispatcher → launch via iso-dispatcher.
-- [ ] Test 2: niet-ISO systeem (bv. SNES rom) → fallback of expliciete niet-ISO route, geen verkeerde iso-dispatcher poging.
-- [ ] Test 3: iso-dispatcher binary tijdelijk niet beschikbaar → duidelijke fout/fallback, geen stille crash.
+- [x] Wijziging: ISO/disc-kandidaten (`ps1/ps2/ps3/psp/gamecube/wii/wiiu/xbox/xbox360/dvd` + disc/marker extensies) gaan eerst via `iso-dispatcher launch <resolved> --class <ISO_CLASS>`; bij ontbrekende dispatcher of non-zero exit: duidelijke log + fallback naar emulation.conf-pad. Workflow-local.
+- [x] Test 1: PSX marker + fake dispatcher → `launch --class ps1` aangeroepen, exit 0.
+- [x] Test 2: SNES `.sfc` → geen iso-dispatcher poging, fallback naar oude emu-pad.
+- [x] Test 3: ontbrekende dispatcher → `[emu] iso-dispatcher niet beschikbaar... fallback...`, geen crash.
 
 ### C5. Preconf/install gedrag herplaatsen of behouden
-- [ ] Wijziging: ISO-systemen via iso-dispatcher; niet-ISO/fallback behoudt `emu-install.sh` + `_apply_preconf`.
-- [ ] Test 1: ontbrekende emulator in fallback-pad → `emu-install.sh` poging zoals vroeger.
-- [ ] Test 2: ISO-systeem via iso-dispatcher, emulator aanwezig → geen onnodige install/preconf side effects.
-- [ ] Test 3: bestaande userconfig blijft onaangetast (`cp -rn` gedrag behouden waar van toepassing).
+- [x] Wijziging: install/preconf/emu-checks verplaatst naar fallback-pad; iso-dispatcher-succespad exit vroeg, geen onnodige install/preconf side effects. Workflow-local.
+- [x] Test 1: ontbrekende emulator in fallback-pad → `emu-install.sh` poging + duidelijke fout, exit 1.
+- [x] Test 2: ISO-systeem via iso-dispatcher (succes) met missing emu in conf → geen install/preconf, exit 0.
+- [x] Test 3: `_apply_preconf` gebruikt nog steeds `cp -rn` (code ongewijzigd).
 
 ### C6. Logging/exit codes normaliseren
-- [ ] Wijziging: geef iso-dispatcher stdout/stderr door; behoud herkenbare `[emu]`/`[game]` prefixen waar fork/UI op leunt.
-- [ ] Test: start vanuit game-gui-fork, bekijk terminaltab — verwacht: duidelijke status, leesbare fouten, exitcode correct.
+- [x] Wijziging: iso-dispatcher stdout/stderr pass-through; `[emu]`/`[game]` prefixen behouden; iso-dispatcher exit code gelogd bij fallback.
+- [x] Test: CLI/shell-verificatie OK (duidelijke logs, exitcodes correct). End-to-end game-gui-fork terminaltab nog niet handmatig geverifieerd.
 
 ## Fase D — `game-gui-fork.py` en gerelateerde files aanpassen
 
