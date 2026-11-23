@@ -69,6 +69,98 @@ iso-dispatcher uses Qt6 and C++17.
 Without `file`, some format signatures cannot be detected.
 
 ---
+## 1a.
+
+# Running the Precompiled Binary
+
+iso-dispatcher can run without installing any development tools or build dependencies.
+
+Only the Qt6 runtime libraries and optional ISO inspection utilities are required.
+
+## Runtime Dependencies
+
+| Dependency | Purpose | Required |
+|---|---|---|
+| Qt6 Core | Application framework | Yes |
+| Qt6 Widgets | Graphical interface | Yes |
+| Qt6 GUI | GUI rendering | Yes |
+| `file` | File format detection | Recommended |
+| `isoinfo` | ISO directory inspection | Recommended |
+| Emulator applications | Launch supported platforms | Optional |
+
+Qt6 runtime libraries are normally installed automatically through the distribution package manager.
+
+## Install Runtime Dependencies
+
+### Debian / Ubuntu / Linux Mint / Pop!_OS
+
+```bash
+sudo apt update
+
+sudo apt install -y \
+    libqt6core6 \
+    libqt6widgets6 \
+    libqt6gui6 \
+    file \
+    genisoimage
+```
+
+### Arch Linux / CachyOS / EndeavourOS / Manjaro
+
+```bash
+sudo pacman -Syu
+
+sudo pacman -S --needed \
+    qt6-base \
+    file \
+    cdrtools
+```
+
+### Fedora / Red Hat based distributions
+
+```bash
+sudo dnf install -y \
+    qt6-qtbase \
+    file \
+    genisoimage
+```
+
+Package names and repository availability may differ on other Red Hat based distributions.
+
+## Verify Runtime Dependencies
+
+```bash
+ldd ./iso-dispatcher
+```
+
+Check for missing libraries:
+
+```bash
+ldd ./iso-dispatcher | grep "not found"
+```
+
+No output means that no missing shared libraries were detected.
+
+Check optional utilities:
+
+```bash
+command -v file
+command -v isoinfo
+```
+
+## Important
+
+- No C++ compiler is required.
+- No CMake or Ninja is required.
+- No Qt6 development packages are required.
+- No Python installation is required.
+- Emulators are only needed to launch their respective platforms.
+- The binary must match the target system architecture and compatible system libraries.
+
+For a fully portable release, consider packaging the required Qt6 libraries alongside the executable.
+
+---
+
 
 ## 2. Install dependencies
 
@@ -491,6 +583,99 @@ iso-dispatcher gebruikt Qt6 en C++17.
 **Belangrijk:** Zonder `isoinfo` blijft iso-dispatcher werken, maar is de detectie van directorystructuren beperkter.
 
 Zonder `file` kunnen bepaalde formatsignatures niet worden herkend.
+
+## 1A
+
+# De voorgecompileerde binary uitvoeren
+
+iso-dispatcher kan worden uitgevoerd zonder ontwikkeltools of build-dependencies te installeren.
+
+Alleen de Qt6-runtimebibliotheken en optionele ISO-inspectieprogramma's zijn vereist.
+
+## Runtime-dependencies
+
+| Dependency | Functie | Vereist |
+|---|---|---|
+| Qt6 Core | Applicatieframework | Ja |
+| Qt6 Widgets | Grafische interface | Ja |
+| Qt6 GUI | GUI-weergave | Ja |
+| `file` | Bestandsformaatdetectie | Aanbevolen |
+| `isoinfo` | ISO-directory inspectie | Aanbevolen |
+| Emulatorapplicaties | Ondersteunde platforms starten | Optioneel |
+
+Qt6-runtimebibliotheken worden normaal gesproken automatisch geïnstalleerd via de pakketbeheerder van de distributie.
+
+## Runtime-dependencies installeren
+
+### Debian / Ubuntu / Linux Mint / Pop!_OS
+
+```bash
+sudo apt update
+
+sudo apt install -y \
+    libqt6core6 \
+    libqt6widgets6 \
+    libqt6gui6 \
+    file \
+    genisoimage
+```
+
+### Arch Linux / CachyOS / EndeavourOS / Manjaro
+
+```bash
+sudo pacman -Syu
+
+sudo pacman -S --needed \
+    qt6-base \
+    file \
+    cdrtools
+```
+
+### Fedora / Red Hat gebaseerde distributies
+
+```bash
+sudo dnf install -y \
+    qt6-qtbase \
+    file \
+    genisoimage
+```
+
+Pakketnamen en beschikbaarheid kunnen verschillen bij andere Red Hat gebaseerde distributies.
+
+## Runtime-dependencies controleren
+
+Controleer de gedeelde bibliotheken:
+
+```bash
+ldd ./iso-dispatcher
+```
+
+Controleer op ontbrekende bibliotheken:
+
+```bash
+ldd ./iso-dispatcher | grep "not found"
+```
+
+Geen uitvoer betekent dat er geen ontbrekende gedeelde bibliotheken zijn gevonden.
+
+Controleer de optionele programma's:
+
+```bash
+command -v file
+command -v isoinfo
+```
+
+## Belangrijk
+
+- Geen C++-compiler nodig.
+- Geen CMake of Ninja nodig.
+- Geen Qt6-developmentpakketten nodig.
+- Geen Python-installatie nodig.
+- Emulators zijn alleen nodig om hun betreffende platforms te starten.
+- De binary moet overeenkomen met de architectuur en compatibele systeembibliotheken van het doelsysteem.
+
+Voor een volledig portable release kun je overwegen de benodigde Qt6-bibliotheken samen met het uitvoerbare bestand te distribueren.
+
 
 ---
 
