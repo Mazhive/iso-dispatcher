@@ -17,6 +17,7 @@ add_executable(iso-dispatcher
     src/core/Classifier.h    src/core/Classifier.cpp
     src/core/Knowledge.h     src/core/Knowledge.cpp
     src/core/Launcher.h      src/core/Launcher.cpp
+    src/core/MarkerMaker.h   src/core/MarkerMaker.cpp
     src/core/Util.h          src/core/Util.cpp
 
     src/cli/Cli.h            src/cli/Cli.cpp

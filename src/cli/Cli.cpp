@@ -1,4 +1,5 @@
 #include "Cli.h"
+#include "core/MarkerMaker.h"
 #include "core/Util.h"
 
 #include <QDirIterator>
@@ -27,6 +28,8 @@ QString Cli::helpText()
         "  iso-dispatcher why <file.iso>           Show full score/evidence breakdown\n"
         "  iso-dispatcher launch <file.iso> [--class id] [--dry-run]\n"
         "  iso-dispatcher learn <dir> [--dry-run] [--limit N]  Seed knowledge from ISO library\n"
+        "  iso-dispatcher make-marker <path> [--class id] [--dry-run] [--json]\n"
+        "                                          Propose/create boot marker for a dir/file\n"
         "  iso-dispatcher stats                    Knowledge stats\n"
         "  iso-dispatcher decisions [N]            Recent decisions\n"
         "  iso-dispatcher forget <fingerprint>     Forget a learned fingerprint\n"
@@ -68,13 +71,14 @@ int Cli::run(const QStringList &args)
     if (cmd == QStringLiteral("why")) return cmdWhy(args.mid(2));
     if (cmd == QStringLiteral("launch")) return cmdLaunch(args.mid(2));
     if (cmd == QStringLiteral("learn")) return cmdLearn(args.mid(2));
+    if (cmd == QStringLiteral("make-marker") || cmd == QStringLiteral("makemarker") || cmd == QStringLiteral("make_marker")) return cmdMakeMarker(args.mid(2));
     if (cmd == QStringLiteral("stats")) return cmdStats();
     if (cmd == QStringLiteral("decisions")) return cmdDecisions(args.mid(2));
     if (cmd == QStringLiteral("forget")) return cmdForget(args.mid(2));
     if (cmd == QStringLiteral("export")) return cmdExport(args.mid(2));
     if (cmd == QStringLiteral("config")) return cmdConfig(args.mid(2));
     if (cmd == QStringLiteral("about") || cmd == QStringLiteral("--about") || cmd == QStringLiteral("--version") || cmd == QStringLiteral("-V")) {
-        out << "iso-dispatcher 0.0.1\n"
+        out << "iso-dispatcher 0.0.2\n"
             << "Content-based ISO classifier/launcher\n\n"
             << "Required emulators/applications:\n"
             << "  - PS1 / PSX  : DuckStation or RetroArch (PSX core)\n"
@@ -281,6 +285,82 @@ int Cli::cmdLearn(const QStringList &a)
     }
     if (!dry) m.kb.save();
     out << "Scanned: " << count << ", learned: " << learned << (dry ? " (dry-run)" : "") << "\n" << Qt::flush;
+    return 0;
+}
+
+int Cli::cmdMakeMarker(const QStringList &a)
+{
+    if (a.isEmpty()) { err << "make-marker: missing <path>\n"; return 2; }
+    QString input;
+    QString forcedClass;
+    bool dry = false;
+    bool json = false;
+    for (int i = 0; i < a.size(); ++i) {
+        const QString x = a.at(i);
+        if ((x == QStringLiteral("--class") || x == QStringLiteral("--system")) && i + 1 < a.size()) forcedClass = a.at(++i);
+        else if (x == QStringLiteral("--dry-run")) dry = true;
+        else if (x == QStringLiteral("--json")) json = true;
+        else if (x.startsWith(QStringLiteral("--class="))) forcedClass = x.mid(QStringLiteral("--class=").size());
+        else if (x.startsWith(QStringLiteral("--system="))) forcedClass = x.mid(QStringLiteral("--system=").size());
+        else if (input.isEmpty()) input = x;
+        else { err << "make-marker: unknown argument: " << x << "\n"; return 2; }
+    }
+    if (input.isEmpty()) { err << "make-marker: missing <path>\n"; return 2; }
+
+    MarkerMaker mm(m.cfg, m.probe, m.classifier);
+    const MarkerProposal p = mm.propose(input, forcedClass);
+
+    if (json) {
+        QJsonObject o = p.toJson();
+        o.insert(QStringLiteral("dryRun"), dry);
+        out << QJsonDocument(o).toJson(QJsonDocument::Indented) << Qt::flush;
+    } else {
+        out << "Status: " << p.status << "\n";
+        if (!p.classId.isEmpty()) out << "Class: " << p.classId << "\n";
+        if (!p.entry.isEmpty()) out << "Entry: " << p.entry << "\n";
+        if (!p.markerPath.isEmpty()) out << "Marker: " << p.markerPath << "\n";
+        if (!p.candidates.isEmpty()) {
+            out << "Candidates:\n";
+            for (const QString &c : p.candidates) out << "  - " << c << "\n";
+        }
+        if (!p.markerContent.isEmpty()) {
+            out << "Content:\n" << p.markerContent;
+            if (!p.markerContent.endsWith(QLatin1Char('\n'))) out << "\n";
+        }
+        if (!p.message.isEmpty()) out << "Message: " << p.message << "\n";
+    }
+
+    if (!p.ok) {
+        if (!json) err << Qt::flush;
+        if (p.status == QStringLiteral("ambiguous")) return 2;
+        return 2;
+    }
+
+    if (p.status == QStringLiteral("unchanged") || p.status == QStringLiteral("exists")) {
+        out << Qt::flush;
+        return 0;
+    }
+
+    if (dry) {
+        if (!json) out << "(dry-run) not writing\n";
+        out << Qt::flush;
+        return 0;
+    }
+
+    QFile f(p.markerPath);
+    if (f.exists()) {
+        if (!json) out << "Skipped: marker exists: " << p.markerPath << "\n";
+        out << Qt::flush;
+        return 0;
+    }
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::NewOnly)) {
+        err << "Failed to write marker: " << p.markerPath << "\n" << Qt::flush;
+        return 1;
+    }
+    f.write(p.markerContent.toUtf8());
+    f.close();
+    if (!json) out << "Wrote: " << p.markerPath << "\n";
+    out << Qt::flush;
     return 0;
 }
 

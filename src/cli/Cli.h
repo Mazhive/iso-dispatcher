@@ -34,6 +34,7 @@ private:
     int cmdWhy(const QStringList &a);
     int cmdLaunch(const QStringList &a);
     int cmdLearn(const QStringList &a);
+    int cmdMakeMarker(const QStringList &a);
     int cmdStats();
     int cmdDecisions(const QStringList &a);
     int cmdForget(const QStringList &a);

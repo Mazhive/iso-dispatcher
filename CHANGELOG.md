@@ -4,10 +4,22 @@ All notable changes to `iso-dispatcher` are documented in this file.
 
 ## Versioning & builds
 
-- **Version**: `MAJOR.MINOR.PATCH` (current: `0.0.1`)
+- **Version**: `MAJOR.MINOR.PATCH` (current: `0.0.2`)
 - **Versioned builds**: place built binaries in `build/Build-versions/`
 - **Naming**: `iso-dispatcher-<version>-linux-x86_64` (append `-<shortsha>` or `-<date>` if needed for same-version dev snapshots)
 - **On new change/build**: bump version in source (`src/cli/Cli.cpp` about/version, `src/ui/MainWindow.cpp` About), update this changelog, rebuild, and copy the new binary to `build/Build-versions/` with the new version name. Keep previous versioned binaries for traceability.
+
+## [0.0.2] - 2026-11-23
+
+### Added
+- `make-marker` CLI subcommand (aliases: `makemarker`, `make_marker`) for boot-marker proposal/creation (Fase B1).
+- `MarkerMaker` core class (`src/core/MarkerMaker.{h,cpp}`) with deterministic candidate selection foundation for B2-B4.
+- `make-marker` flags: `--class/--system`, `--dry-run`, `--json`; statuses: `proposed`, `unchanged`, `exists`, `ambiguous`, `error`.
+- Initial entry-selection heuristics: PS1/PS2 prefer `.cue` then `.chd/.iso/.bin`; PS3 prefers `PS3_GAME/USRDIR/EBOOT.BIN`/`EBOOT.BIN`; PSP prefers `.iso/.cso/.pbp`/`EBOOT.PBP`; existing `*boot.iso` files excluded as candidates.
+
+### Verified
+- `make-marker "/.../PSX/Ace_Combat_2" --class ps1 --dry-run` → proposed `Ace_Combat_2.ps1boot.iso`, entry `Ace_Combat_2_[SCES-00699].cue`, no write.
+- `make-marker "/.../PSX/Ace_Combat_2" --dry-run` without class → clear error asking for `--class`.
 
 ## [0.0.1] - 2026-11-23
 
