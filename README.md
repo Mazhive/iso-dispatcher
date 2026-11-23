@@ -69,15 +69,12 @@ iso-dispatcher uses Qt6 and C++17.
 Without `file`, some format signatures cannot be detected.
 
 ---
-## 1a.
 
-# Running the Precompiled Binary
+## 2. Option A — Run precompiled binary (no build required)
 
-iso-dispatcher can run without installing any development tools or build dependencies.
+Use this if you downloaded a precompiled `iso-dispatcher` binary. **No compiler, CMake, Ninja, or Qt6 development packages are needed.**
 
-Only the Qt6 runtime libraries and optional ISO inspection utilities are required.
-
-## Runtime Dependencies
+### Runtime dependencies
 
 | Dependency | Purpose | Required |
 |---|---|---|
@@ -90,9 +87,9 @@ Only the Qt6 runtime libraries and optional ISO inspection utilities are require
 
 Qt6 runtime libraries are normally installed automatically through the distribution package manager.
 
-## Install Runtime Dependencies
+### Install runtime dependencies
 
-### Debian / Ubuntu / Linux Mint / Pop!_OS
+#### Debian / Ubuntu / Linux Mint / Pop!_OS
 
 ```bash
 sudo apt update
@@ -105,7 +102,7 @@ sudo apt install -y \
     genisoimage
 ```
 
-### Arch Linux / CachyOS / EndeavourOS / Manjaro
+#### Arch Linux / CachyOS / EndeavourOS / Manjaro
 
 ```bash
 sudo pacman -Syu
@@ -116,7 +113,7 @@ sudo pacman -S --needed \
     cdrtools
 ```
 
-### Fedora / Red Hat based distributions
+#### Fedora / Red Hat based distributions
 
 ```bash
 sudo dnf install -y \
@@ -127,7 +124,7 @@ sudo dnf install -y \
 
 Package names and repository availability may differ on other Red Hat based distributions.
 
-## Verify Runtime Dependencies
+### Verify runtime dependencies
 
 ```bash
 ldd ./iso-dispatcher
@@ -148,21 +145,22 @@ command -v file
 command -v isoinfo
 ```
 
-## Important
+### Notes
 
 - No C++ compiler is required.
 - No CMake or Ninja is required.
 - No Qt6 development packages are required.
-- No Python installation is required.
 - Emulators are only needed to launch their respective platforms.
 - The binary must match the target system architecture and compatible system libraries.
-
-For a fully portable release, consider packaging the required Qt6 libraries alongside the executable.
+- For a fully portable release, consider packaging the required Qt6 libraries alongside the executable.
 
 ---
 
+## 3. Option B — Build from source (build dependencies)
 
-## 2. Install dependencies
+Use this if you want to compile iso-dispatcher yourself. **Build tools and Qt6 development packages are required.**
+
+### Install build dependencies
 
 Choose the instructions for your Linux distribution.
 
@@ -584,15 +582,11 @@ iso-dispatcher gebruikt Qt6 en C++17.
 
 Zonder `file` kunnen bepaalde formatsignatures niet worden herkend.
 
-## 1A
+## 2. Optie A — Voorgecompileerde binary uitvoeren (geen build nodig)
 
-# De voorgecompileerde binary uitvoeren
+Gebruik dit als je een voorgecompileerde `iso-dispatcher` binary hebt gedownload. **Geen compiler, CMake, Ninja of Qt6-developmentpakketten nodig.**
 
-iso-dispatcher kan worden uitgevoerd zonder ontwikkeltools of build-dependencies te installeren.
-
-Alleen de Qt6-runtimebibliotheken en optionele ISO-inspectieprogramma's zijn vereist.
-
-## Runtime-dependencies
+### Runtime-dependencies
 
 | Dependency | Functie | Vereist |
 |---|---|---|
@@ -605,9 +599,9 @@ Alleen de Qt6-runtimebibliotheken en optionele ISO-inspectieprogramma's zijn ver
 
 Qt6-runtimebibliotheken worden normaal gesproken automatisch geïnstalleerd via de pakketbeheerder van de distributie.
 
-## Runtime-dependencies installeren
+### Runtime-dependencies installeren
 
-### Debian / Ubuntu / Linux Mint / Pop!_OS
+#### Debian / Ubuntu / Linux Mint / Pop!_OS
 
 ```bash
 sudo apt update
@@ -620,7 +614,7 @@ sudo apt install -y \
     genisoimage
 ```
 
-### Arch Linux / CachyOS / EndeavourOS / Manjaro
+#### Arch Linux / CachyOS / EndeavourOS / Manjaro
 
 ```bash
 sudo pacman -Syu
@@ -631,7 +625,7 @@ sudo pacman -S --needed \
     cdrtools
 ```
 
-### Fedora / Red Hat gebaseerde distributies
+#### Fedora / Red Hat gebaseerde distributies
 
 ```bash
 sudo dnf install -y \
@@ -642,7 +636,7 @@ sudo dnf install -y \
 
 Pakketnamen en beschikbaarheid kunnen verschillen bij andere Red Hat gebaseerde distributies.
 
-## Runtime-dependencies controleren
+### Runtime-dependencies controleren
 
 Controleer de gedeelde bibliotheken:
 
@@ -665,21 +659,22 @@ command -v file
 command -v isoinfo
 ```
 
-## Belangrijk
+### Opmerkingen
 
 - Geen C++-compiler nodig.
 - Geen CMake of Ninja nodig.
 - Geen Qt6-developmentpakketten nodig.
-- Geen Python-installatie nodig.
 - Emulators zijn alleen nodig om hun betreffende platforms te starten.
 - De binary moet overeenkomen met de architectuur en compatibele systeembibliotheken van het doelsysteem.
-
-Voor een volledig portable release kun je overwegen de benodigde Qt6-bibliotheken samen met het uitvoerbare bestand te distribueren.
-
+- Voor een volledig portable release kun je overwegen de benodigde Qt6-bibliotheken samen met het uitvoerbare bestand te distribueren.
 
 ---
 
-## 2. Dependencies installeren
+## 3. Optie B — Zelf compileren (build-dependencies)
+
+Gebruik dit als je iso-dispatcher zelf wilt bouwen. **Build-tools en Qt6-developmentpakketten zijn vereist.**
+
+### Build-dependencies installeren
 
 Kies de instructies voor jouw Linux-distributie.
 
